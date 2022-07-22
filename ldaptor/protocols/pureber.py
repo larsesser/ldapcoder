@@ -14,10 +14,9 @@
 # (4) If a value of a type is its default value, it MUST be absent.
 #     Only some BOOLEAN and INTEGER types have default values in
 #     this protocol definition.
-
-from collections import UserList
-
-from ldaptor._encoder import to_bytes, WireStrAlias
+import abc
+import enum
+from typing import Tuple, List, Optional, Type
 
 # xxxxxxxx
 # |/|\.../
@@ -48,18 +47,17 @@ TAG_MASK = 0x1F
 
 
 class UnknownBERTag(Exception):
-    def __init__(self, tag, context):
+    def __init__(self, tag):
         Exception.__init__(self)
         self.tag = tag
-        self.context = context
 
     def __str__(self):
-        return "BERDecoderContext has no tag 0x{:02x}: {}".format(
-            self.tag, self.context
+        return "BERDecoderContext has no tag 0x{:02x}".format(
+            self.tag
         )
 
 
-def berDecodeLength(m, offset=0):
+def berDecodeLength(m: bytes, offset: int = 0) -> Tuple[int, int]:
     """
     Return a tuple of (length, lengthLength).
     m must be atleast one byte long.
@@ -69,11 +67,11 @@ def berDecodeLength(m, offset=0):
     if l & 0x80:
         ll = 1 + (l & 0x7F)
         need(m, offset + ll)
-        l = ber2int(m[offset + 1 : offset + ll], signed=0)
+        l = ber2int(m[offset + 1 : offset + ll], signed=False)
     return (l, ll)
 
 
-def int2berlen(i):
+def int2berlen(i: int) -> bytes:
     assert i >= 0
     e = int2ber(i, signed=False)
     if i <= 127:
@@ -85,7 +83,7 @@ def int2berlen(i):
         return bytes((0x80 | l,)) + e
 
 
-def int2ber(i, signed=True):
+def int2ber(i: int, signed: bool = True) -> bytes:
     encoded = b""
     while (signed and (i > 127 or i < -128)) or (not signed and (i > 255)):
         encoded = bytes((i % 256,)) + encoded
@@ -94,7 +92,7 @@ def int2ber(i, signed=True):
     return encoded
 
 
-def ber2int(e, signed=True):
+def ber2int(e: bytes, signed: bool = True) -> int:
     need(e, 1)
     v = 0 + ord(e[0:1])
     if v & 0x80 and signed:
@@ -104,15 +102,12 @@ def ber2int(e, signed=True):
     return v
 
 
-class BERBase(WireStrAlias):
-    tag = None
+class BERBase(metaclass=abc.ABCMeta):
+    tag: int
 
-    def identification(self):
-        return self.tag
-
-    def __init__(self, tag=None):
-        if tag is not None:
-            self.tag = tag
+    @abc.abstractmethod
+    def __init__(self):
+        raise NotImplementedError
 
     def __len__(self):
         return len(self.toWire())
@@ -131,13 +126,19 @@ class BERBase(WireStrAlias):
     def __hash__(self):
         return hash(self.toWire())
 
-    def toWire(self):
-        return b""
+    @classmethod
+    @abc.abstractmethod
+    def fromBER(cls, content: bytes) -> "BERBase":
+        """Create an instance of this class from a binary string.
 
+        This is the default way an instance of this class will be created.
+        """
+        raise NotImplementedError
 
-class BERStructured(BERBase):
-    def identification(self):
-        return STRUCTURED | self.tag
+    @abc.abstractmethod
+    def toWire(self) -> bytes:
+        """Encode the instance of this class to its binary value."""
+        raise NotImplementedError
 
 
 class BERException(Exception):
@@ -148,7 +149,7 @@ class BERExceptionInsufficientData(Exception):
     pass
 
 
-def need(buf, n):
+def need(buf: bytes, n: int) -> None:
     d = n - len(buf)
     if d > 0:
         raise BERExceptionInsufficientData(d)
@@ -156,26 +157,23 @@ def need(buf, n):
 
 class BERInteger(BERBase):
     tag = 0x02
-    value = None
+    value: int
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
+    def fromBER(cls, content: bytes) -> "BERInteger":
         assert len(content) > 0
-        value = ber2int(content)
-        r = klass(value=value, tag=tag)
-        return r
+        return cls(ber2int(content))
 
-    def __init__(self, value=None, tag=None):
+    def __init__(self, value: int):
         """Create a new BERInteger object.
         value is an integer.
         """
-        BERBase.__init__(self, tag)
         assert value is not None
         self.value = value
 
     def toWire(self):
         encoded = int2ber(self.value)
-        return bytes((self.identification(),)) + int2berlen(len(encoded)) + encoded
+        return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
@@ -189,24 +187,19 @@ class BERInteger(BERBase):
 
 class BEROctetString(BERBase):
     tag = 0x04
-
-    value = None
+    value: bytes
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
+    def fromBER(cls, content: bytes) -> "BEROctetString":
         assert len(content) >= 0
-        r = klass(value=content, tag=tag)
-        return r
+        return cls(content)
 
-    def __init__(self, value=None, tag=None):
-        BERBase.__init__(self, tag)
+    def __init__(self, value: bytes,):
         assert value is not None
         self.value = value
 
     def toWire(self):
-        value = to_bytes(self.value)
-        result = bytes((self.identification(),)) + int2berlen(len(value)) + value
-        return result
+        return bytes((self.tag,)) + int2berlen(len(self.value)) + self.value
 
     def __repr__(self):
         value = self.value
@@ -221,18 +214,18 @@ class BEROctetString(BERBase):
 
 class BERNull(BERBase):
     tag = 0x05
+    value = None
+
+    def __init__(self):
+        pass
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
+    def fromBER(cls, content: bytes) -> "BERNull":
         assert len(content) == 0
-        r = klass(tag=tag)
-        return r
-
-    def __init__(self, tag=None):
-        BERBase.__init__(self, tag)
+        return cls()
 
     def toWire(self):
-        return bytes((self.identification(),)) + bytes((0,))
+        return bytes((self.tag,)) + bytes((0,))
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
@@ -243,27 +236,23 @@ class BERNull(BERBase):
 
 class BERBoolean(BERBase):
     tag = 0x01
+    value: bool
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
+    def fromBER(cls, content: bytes) -> "BERBoolean":
         assert len(content) > 0
-        value = ber2int(content)
-        r = klass(value=value, tag=tag)
-        return r
+        return cls(bool(ber2int(content)))
 
-    def __init__(self, value=None, tag=None):
+    def __init__(self, value: bool):
         """Create a new BERInteger object.
         value is an integer.
         """
-        BERBase.__init__(self, tag)
         assert value is not None
-        if value:
-            value = 0xFF
         self.value = value
 
     def toWire(self):
-        assert self.value == 0 or self.value == 0xFF
-        return bytes((self.identification(),)) + int2berlen(1) + bytes((self.value,))
+        value = 0xFF if self.value else 0x00
+        return bytes((self.tag,)) + int2berlen(1) + bytes((value,))
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
@@ -275,45 +264,57 @@ class BERBoolean(BERBase):
             )
 
 
-class BEREnumerated(BERInteger):
+class BEREnumerated(BERBase):
     tag = 0x0A
-
-
-class BERSequence(BERStructured, UserList):
-    # TODO __getslice__ calls __init__ with no args.
-    tag = 0x10
+    value: enum.IntEnum
+    enum_cls: Type[enum.IntEnum]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
-        r = klass(l, tag=tag)
-        return r
+    def fromBER(cls, content: bytes) -> "BEREnumerated":
+        assert len(content) > 0
+        return cls(ber2int(content))
 
-    def __init__(self, value=None, tag=None):
-        BERStructured.__init__(self, tag)
+    def __init__(self, value: int):
         assert value is not None
-        UserList.__init__(self, value)
+        self.value = self.enum_cls(value)
 
     def toWire(self):
-        r = b"".join(to_bytes(x) for x in self.data)
-        return bytes((self.identification(),)) + int2berlen(len(r)) + r
+        encoded = int2ber(self.value.value)
+        return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%s)" % repr(self.data)
+            return self.__class__.__name__ + "(value=%r)" % self.value
         else:
-            return self.__class__.__name__ + "(value=%s, tag=%d)" % (
-                repr(self.data),
+            return self.__class__.__name__ + "(value=%r, tag=%d)" % (
+                self.value,
                 self.tag,
             )
 
 
-class BERSequenceOf(BERSequence):
+class BERSequence(BERBase, metaclass=abc.ABCMeta):
+    tag = STRUCTURED | 0x10
+
+    def encode(self, content: List[BERBase]) -> bytes:
+        """Helper method to encode the given BERObjects into a BERSequence as bytes."""
+        vals = b"".join(x.toWire() for x in content)
+        return bytes((self.tag,)) + int2berlen(len(vals)) + vals
+
+    @staticmethod
+    def decode(content: bytes) -> List[Tuple[int, bytes]]:
+        """Helper method to decode the given bytes into elements tags and contents."""
+        vals, bytes_used = berUnwrap(content)
+        if bytes_used != len(content):
+            raise BERExceptionInsufficientData
+        return vals
+
+
+class BERSequenceOf(BERSequence, metaclass=abc.ABCMeta):
     pass
 
 
-class BERSet(BERSequence):
-    tag = 0x11
+class BERSet(BERSequence, metaclass=abc.ABCMeta):
+    tag = STRUCTURED | 0x11
 
 
 class BERDecoderContext:
@@ -360,13 +361,40 @@ class BERDecoderContext:
         )
 
 
-def berDecodeObject(context, m):
+def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
+    """Takes a raw ber byte string and returns all of its elements tags and contents.
+
+    This does no attempts to decode the contents into an BERObjects.
+
+    :returns: A tuple with two elements. The first element contains a list of all
+        objects as tuple with two elements (object tag and objects content). The second
+        element contains the number of used bytes from the given byte string.
+    """
+    ret = []
+    bytes_used = 0
+    while raw:
+        # The first two bytes are necessary, since they decode the tag and the length
+        need(raw, 2)
+        tag = ber2int(raw[0:1], signed=False)
+        length, lenlen = berDecodeLength(raw, offset=1)
+
+        # ensure all content is present
+        need(raw, 1 + lenlen + length)
+        content = raw[1 + lenlen : 1 + lenlen + length]
+
+        ret.append((tag, content))
+        bytes_used += 1 + lenlen + length
+    return (ret, bytes_used)
+
+
+
+def berDecodeObject(context: BERDecoderContext, m: bytes) -> Tuple[Optional[BERBase], int]:
     """berDecodeObject(context, bytes) -> (berobject, bytesUsed)
     berobject may be None.
     """
     while m:
         need(m, 2)
-        i = ber2int(m[0:1], signed=0) & (CLASS_MASK | TAG_MASK)
+        i = ber2int(m[0:1], signed=False)
 
         length, lenlen = berDecodeLength(m, offset=1)
         need(m, 1 + lenlen + length)
@@ -376,7 +404,7 @@ def berDecodeObject(context, m):
         if berclass:
             inh = context.inherit()
             assert inh
-            r = berclass.fromBER(tag=i, content=m2, berdecoder=inh)
+            r = berclass.fromBER(content=m2, context=inh)
             return (r, 1 + lenlen + length)
         else:
             print(str(UnknownBERTag(i, context)))  # TODO
@@ -384,7 +412,7 @@ def berDecodeObject(context, m):
     return (None, 0)
 
 
-def berDecodeMultiple(content, berdecoder):
+def berDecodeMultiple(content: bytes, context: BERDecoderContext) -> List[BERBase]:
     """berDecodeMultiple(content, berdecoder) -> [objects]
 
     Decodes everything in content and returns a list of decoded
@@ -395,7 +423,7 @@ def berDecodeMultiple(content, berdecoder):
     """
     l = []
     while content:
-        n, bytes = berDecodeObject(berdecoder, content)
+        n, bytes = berDecodeObject(context, content)
         if n is not None:
             l.append(n)
         assert bytes <= len(content)
