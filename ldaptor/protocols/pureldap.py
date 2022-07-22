@@ -1,7 +1,8 @@
 """LDAP protocol message conversion; no application logic here."""
 
+import abc
 import string
-
+from typing import Optional, List, Mapping, Type
 
 from ldaptor.protocols.pureber import (
     BERBoolean,
@@ -13,12 +14,13 @@ from ldaptor.protocols.pureber import (
     BERSequence,
     BERSequenceOf,
     BERSet,
-    BERStructured,
     CLASS_APPLICATION,
     CLASS_CONTEXT,
     berDecodeMultiple,
     berDecodeObject,
     int2berlen,
+    UnknownBERTag,
+    BERBase
 )
 from ldaptor._encoder import to_bytes
 
@@ -67,72 +69,95 @@ class LDAPAttributeValue(BEROctetString):
     pass
 
 
+# LDAPMessage ::= SEQUENCE {
+#      messageID       MessageID,
+#      protocolOp      CHOICE {
+#           bindRequest           BindRequest,
+#           bindResponse          BindResponse,
+#           unbindRequest         UnbindRequest,
+#           searchRequest         SearchRequest,
+#           searchResEntry        SearchResultEntry,
+#           searchResDone         SearchResultDone,
+#           searchResRef          SearchResultReference,
+#           modifyRequest         ModifyRequest,
+#           modifyResponse        ModifyResponse,
+#           addRequest            AddRequest,
+#           addResponse           AddResponse,
+#           delRequest            DelRequest,
+#           delResponse           DelResponse,
+#           modDNRequest          ModifyDNRequest,
+#           modDNResponse         ModifyDNResponse,
+#           compareRequest        CompareRequest,
+#           compareResponse       CompareResponse,
+#           abandonRequest        AbandonRequest,
+#           extendedReq           ExtendedRequest,
+#           extendedResp          ExtendedResponse,
+#           ...,
+#           intermediateResponse  IntermediateResponse },
+#      controls       [0] Controls OPTIONAL }
+#
+# MessageID ::= INTEGER (0 ..  maxInt)
+# maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
 class LDAPMessage(BERSequence):
     """
     To encode this object in order to be sent over the network use the toWire()
     method.
     """
-
-    id = None
-    value = None
+    msg_id: int
+    operation: "LDAPProtocolOp"
+    controls: Optional[List["LDAPControl"]]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
+    def fromBER(cls, content: bytes) -> "LDAPMessage":
+        vals = cls.decode(content)
+        assert len(vals) in {2, 3}
 
-        id_ = l[0].value
-        value = l[1]
-        if l[2:]:
-            controls = []
-            for c in l[2]:
-                controls.append(
-                    (
-                        c.controlType,
-                        c.criticality,
-                        c.controlValue,
-                    )
-                )
+        msg_tag, msg_content = vals[0]
+        assert msg_tag == BERInteger.tag
+        msg_id = BERInteger.fromBER(msg_content).value
+
+        operation_tag, operation_content = vals[1]
+        if operation_tag not in PROTOCOL_OPERATIONS:
+            raise UnknownBERTag(operation_tag)
+        operation = PROTOCOL_OPERATIONS[operation_tag].fromBER(operation_content)
+
+        if len(vals) == 3:
+            controls_tag, controls_content = vals[3]
+            assert controls_tag == LDAPControls.tag
+            controls = LDAPControls.fromBER(controls_content).controls
         else:
             controls = None
-        assert not l[3:]
 
-        r = klass(id=id_, value=value, controls=controls, tag=tag)
+        r = cls(msg_id=msg_id, operation=operation, controls=controls)
         return r
 
-    def __init__(self, value=None, controls=None, id=None, tag=None):
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert value is not None
-        self.id = id
-        if self.id is None:
-            self.id = alloc_ldap_message_id()
-        self.value = value
+    def __init__(self, operation: "LDAPProtocolOp", controls: List["LDAPControl"] = None, msg_id: int = None):
+        assert operation is not None
+
+        if msg_id is None:
+            msg_id = alloc_ldap_message_id()
+        self.msg_id = msg_id
+        self.operation = operation
         self.controls = controls
 
     def toWire(self):
-        """
-        This is the wire/encoded representation.
-        """
-        l = [BERInteger(self.id), self.value]
+        vals = [BERInteger(self.msg_id), self.operation]
         if self.controls is not None:
-            l.append(LDAPControls([LDAPControl(*a) for a in self.controls]))
-        return BERSequence(l).toWire()
+            vals.append(LDAPControls(self.controls))
+        return self.encode(vals)
 
     def __repr__(self):
         l = []
-        l.append("id=%r" % self.id)
-        l.append("value=%r" % self.value)
+        l.append("id=%r" % self.msg_id)
+        l.append("value=%r" % self.operation)
         l.append("controls=%r" % self.controls)
         if self.tag != self.__class__.tag:
             l.append("tag=%d" % self.tag)
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-class LDAPProtocolOp:
-    def __init__(self):
-        pass
-
-    def toWire(self):
-        raise NotImplementedError()
+class LDAPProtocolOp(BERBase, metaclass=abc.ABCMeta):
+    pass
 
 
 class LDAPProtocolRequest(LDAPProtocolOp):
@@ -1069,58 +1094,81 @@ class LDAPSearchResultDone(LDAPResult):
     tag = CLASS_APPLICATION | 0x05
 
 
+# Controls ::= SEQUENCE OF control Control
 class LDAPControls(BERSequence):
-    tag = CLASS_CONTEXT | 0x00
+    controls: List["LDAPControl"]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_LDAPControls(inherit=berdecoder)
-        )
+    def fromBER(cls, content: bytes) -> "LDAPControls":
+        vals = cls.decode(content)
+        controls = []
+        for val in vals:
+            control_tag, control_content = val
+            assert control_tag == LDAPControl.tag
+            controls.append(LDAPControl.fromBER(control_content))
+        return cls(controls)
 
-        r = klass(l, tag=tag)
-        return r
+    def __init__(self, controls: List["LDAPControl"]):
+        self.controls = controls
+
+    def toWire(self) -> bytes:
+        return self.encode(self.controls)
 
 
+# Control ::= SEQUENCE {
+#      controlType             LDAPOID,
+#      criticality             BOOLEAN DEFAULT FALSE,
+#      controlValue            OCTET STRING OPTIONAL }
 class LDAPControl(BERSequence):
-    criticality = None
-    controlValue = None
+    controlType: bytes
+    criticality: Optional[bool]
+    controlValue: Optional[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
+    def fromBER(cls, content: bytes) -> "LDAPControl":
+        vals = cls.decode(content)
+        assert 1 <= len(vals) <= 3
 
-        assert 1 <= len(l) <= 3
+        controlType_tag, controlType_content = vals[0]
+        assert controlType_tag == LDAPOID.tag
+        controlType = LDAPOID.fromBER(controlType_content).value
 
-        kw = {}
-        if len(l) == 2:
-            if isinstance(l[1], BERBoolean):
-                kw["criticality"] = l[1].value
-            elif isinstance(l[1], BEROctetString):
-                kw["controlValue"] = l[1].value
-        elif len(l) == 3:
-            kw["criticality"] = l[1].value
-            kw["controlValue"] = l[2].value
+        criticality = None
+        controlValue = None
+        if len(vals) == 2:
+            unknown_tag, unknown_content = vals[1]
+            if unknown_tag == BERBoolean.tag:
+                criticality = BERBoolean.fromBER(unknown_content).value
+            elif unknown_tag == BEROctetString.tag:
+                controlValue = BEROctetString.fromBER(unknown_content).value
+            else:
+                raise UnknownBERTag(unknown_tag)
+        else:
+            criticality_tag, criticality_content = vals[1]
+            assert criticality_tag == BERBoolean.tag
+            criticality = BERBoolean.fromBER(criticality_content).value
 
-        r = klass(controlType=l[0].value, tag=tag, **kw)
-        return r
+            controlValue_tag, controlValue_content = vals[2]
+            assert controlValue_tag == BEROctetString.tag
+            controlValue = BEROctetString.fromBER(controlType_content).value
+
+        return cls(controlType=controlType, criticality=criticality, controlValue=controlValue)
 
     def __init__(
-        self, controlType, criticality=None, controlValue=None, id=None, tag=None
+        self, controlType: bytes, criticality: bool = None, controlValue: bytes = None
     ):
-        BERSequence.__init__(self, value=[], tag=tag)
         assert controlType is not None
         self.controlType = controlType
         self.criticality = criticality
         self.controlValue = controlValue
 
     def toWire(self):
-        self.data = [LDAPOID(self.controlType)]
+        vals = [LDAPOID(self.controlType)]
         if self.criticality is not None:
-            self.data.append(BERBoolean(self.criticality))
+            vals.append(BERBoolean(self.criticality))
         if self.controlValue is not None:
-            self.data.append(BEROctetString(self.controlValue))
-        return BERSequence.toWire(self)
+            vals.append(BEROctetString(self.controlValue))
+        return self.encode(vals)
 
 
 class LDAPBERDecoderContext_LDAPControls(BERDecoderContext):
@@ -1791,3 +1839,28 @@ class LDAPBERDecoderContext(BERDecoderContext):
         LDAPCompareRequest.tag: LDAPCompareRequest,
         LDAPCompareResponse.tag: LDAPCompareResponse,
     }
+
+
+PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
+    LDAPBindResponse.tag: LDAPBindResponse,
+    LDAPBindRequest.tag: LDAPBindRequest,
+    LDAPUnbindRequest.tag: LDAPUnbindRequest,
+    LDAPSearchRequest.tag: LDAPSearchRequest,
+    LDAPSearchResultEntry.tag: LDAPSearchResultEntry,
+    LDAPSearchResultDone.tag: LDAPSearchResultDone,
+    LDAPSearchResultReference.tag: LDAPSearchResultReference,
+    LDAPReferral.tag: LDAPReferral,
+    LDAPModifyRequest.tag: LDAPModifyRequest,
+    LDAPModifyResponse.tag: LDAPModifyResponse,
+    LDAPAddRequest.tag: LDAPAddRequest,
+    LDAPAddResponse.tag: LDAPAddResponse,
+    LDAPDelRequest.tag: LDAPDelRequest,
+    LDAPDelResponse.tag: LDAPDelResponse,
+    LDAPExtendedRequest.tag: LDAPExtendedRequest,
+    LDAPExtendedResponse.tag: LDAPExtendedResponse,
+    LDAPModifyDNRequest.tag: LDAPModifyDNRequest,
+    LDAPModifyDNResponse.tag: LDAPModifyDNResponse,
+    LDAPAbandonRequest.tag: LDAPAbandonRequest,
+    LDAPCompareRequest.tag: LDAPCompareRequest,
+    LDAPCompareResponse.tag: LDAPCompareResponse,
+}
