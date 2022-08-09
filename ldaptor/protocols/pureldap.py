@@ -332,8 +332,10 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
+# Referral ::= SEQUENCE SIZE (1..MAX) OF uri URI
+# URI ::= LDAPString     -- limited to characters permitted in URIs
 class LDAPReferral(BERSequence):
-    tag = CLASS_CONTEXT | 0x03
+    pass
 
 
 class LDAPBERDecoderContext_LDAPSearchResultReference(BERDecoderContext):
@@ -371,80 +373,112 @@ class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
         )
 
 
+# LDAPResult ::= SEQUENCE {
+#      resultCode         ENUMERATED {
+#           success                      (0),
+#           operationsError              (1),
+#           protocolError                (2),
+#           timeLimitExceeded            (3),
+#           sizeLimitExceeded            (4),
+#           compareFalse                 (5),
+#           compareTrue                  (6),
+#           authMethodNotSupported       (7),
+#           strongerAuthRequired         (8),
+#  -- 9 reserved --
+#           referral                     (10),
+#           adminLimitExceeded           (11),
+#           unavailableCriticalExtension (12),
+#           confidentialityRequired      (13),
+#           saslBindInProgress           (14),
+#           noSuchAttribute              (16),
+#           undefinedAttributeType       (17),
+#           inappropriateMatching        (18),
+#           constraintViolation          (19),
+#           attributeOrValueExists       (20),
+#           invalidAttributeSyntax       (21),
+#  -- 22-31 unused --
+#           noSuchObject                 (32),
+#           aliasProblem                 (33),
+#           invalidDNSyntax              (34),
+#  -- 35 reserved for undefined isLeaf --
+#           aliasDereferencingProblem    (36),
+#  -- 37-47 unused --
+#           inappropriateAuthentication  (48),
+#           invalidCredentials           (49),
+#           insufficientAccessRights     (50),
+#           busy                         (51),
+#           unavailable                  (52),
+#           unwillingToPerform           (53),
+#           loopDetect                   (54),
+#  -- 55-63 unused --
+#           namingViolation              (64),
+#           objectClassViolation         (65),
+#           notAllowedOnNonLeaf          (66),
+#           notAllowedOnRDN              (67),
+#           entryAlreadyExists           (68),
+#           objectClassModsProhibited    (69),
+#  -- 70 reserved for CLDAP --
+#           affectsMultipleDSAs          (71),
+#  -- 72-79 unused --
+#           other                        (80),
+#           ...  },
+#      matchedDN          LDAPDN,
+#      diagnosticMessage  LDAPString,
+#      referral           [3] Referral OPTIONAL }
 class LDAPResult(LDAPProtocolResponse, BERSequence):
-    @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_LDAPBindRequest(fallback=berdecoder)
-        )
+    resultCode: int
+    matchedDN: str
+    diagnosticMessage: str
+    referral: Optional[LDAPReferral]
 
-        assert 3 <= len(l) <= 4
+    @classmethod
+    def fromBER(cls, content: bytes):
+        vals = cls.decode(content)
+        assert 3 <= len(vals) <= 4
+
+        resultCode_tag, resultCode_content = vals[0]
+        assert resultCode_tag == BEREnumerated.tag
+        resultCode = BEREnumerated.fromBER(resultCode_content).value
+
+        matchedDN_tag, matchedDN_content = vals[1]
+        assert matchedDN_tag == LDAPDN.tag
+        matchedDN = LDAPDN.fromBER(matchedDN_content).value
+
+        diagnosticMessage_tag, diagnosticMessage_content = vals[2]
+        assert diagnosticMessage_tag == LDAPString.tag
+        diagnosticMessage = LDAPString.fromBER(diagnosticMessage_content).value
 
         referral = None
-        # if (l[3:] and isinstance(l[3], LDAPReferral)):
-        # TODO support referrals
-        # self.referral=self.data[0]
+        if len(vals) == 4:
+            raise NotImplementedError
 
-        r = klass(
-            resultCode=l[0].value,
-            matchedDN=l[1].value,
-            errorMessage=l[2].value,
+        r = cls(
+            resultCode=resultCode,
+            matchedDN=matchedDN,
+            diagnosticMessage=diagnosticMessage,
             referral=referral,
-            tag=tag,
         )
         return r
 
-    def __init__(
-        self,
-        resultCode=None,
-        matchedDN=None,
-        errorMessage=None,
-        referral=None,
-        serverSaslCreds=None,
-        tag=None,
-    ):
-        LDAPProtocolResponse.__init__(self)
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert resultCode is not None
+    def __init__(self, resultCode: int, matchedDN: str, diagnosticMessage: str,
+                 referral=None):
         self.resultCode = resultCode
-        if matchedDN is None:
-            matchedDN = ""
         self.matchedDN = matchedDN
-        if errorMessage is None:
-            errorMessage = ""
-        self.errorMessage = errorMessage
+        self.diagnosticMessage = diagnosticMessage
         self.referral = referral
-        self.serverSaslCreds = serverSaslCreds
 
     def toWire(self):
         assert self.referral is None  # TODO
-        if self.serverSaslCreds:
-            return BERSequence(
-                [
-                    BEREnumerated(self.resultCode),
-                    BEROctetString(self.matchedDN),
-                    BEROctetString(self.errorMessage),
-                    LDAPBindResponse_serverSaslCreds(self.serverSaslCreds),
-                ],
-                tag=self.tag,
-            ).toWire()
-        else:
-            return BERSequence(
-                [
-                    BEREnumerated(self.resultCode),
-                    BEROctetString(self.matchedDN),
-                    BEROctetString(self.errorMessage),
-                ],
-                tag=self.tag,
-            ).toWire()
+        return self.encode([BEREnumerated(self.resultCode), LDAPDN(self.matchedDN),
+                            LDAPString(self.diagnosticMessage)])
 
     def __repr__(self):
         l = []
         l.append("resultCode=%r" % self.resultCode)
         if self.matchedDN:
             l.append("matchedDN=%r" % self.matchedDN)
-        if self.errorMessage:
-            l.append("errorMessage=%r" % self.errorMessage)
+        if self.diagnosticMessage:
+            l.append("diagnosticMessage=%r" % self.diagnosticMessage)
         if self.referral:
             l.append("referral=%r" % self.referral)
         if self.tag != self.__class__.tag:
