@@ -1206,6 +1206,7 @@ class LDAPSearchResultDone(LDAPResult):
 
 # Controls ::= SEQUENCE OF control Control
 class LDAPControls(BERSequence):
+    tag = CLASS_CONTEXT | STRUCTURED | 0x00
     controls: List["LDAPControl"]
 
     @classmethod
@@ -1230,6 +1231,7 @@ class LDAPControls(BERSequence):
 #      criticality             BOOLEAN DEFAULT FALSE,
 #      controlValue            OCTET STRING OPTIONAL }
 class LDAPControl(BERSequence):
+    tag = CLASS_CONTEXT | STRUCTURED | 0x00
     controlType: bytes
     criticality: Optional[bool]
     controlValue: Optional[bytes]

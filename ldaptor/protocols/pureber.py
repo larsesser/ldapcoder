@@ -156,7 +156,7 @@ def need(buf: bytes, n: int) -> None:
 
 
 class BERInteger(BERBase):
-    tag = 0x02
+    tag = CLASS_UNIVERSAL | 0x02
     value: int
 
     @classmethod
@@ -186,7 +186,7 @@ class BERInteger(BERBase):
 
 
 class BEROctetString(BERBase):
-    tag = 0x04
+    tag = CLASS_UNIVERSAL | 0x04
     value: bytes
 
     @classmethod
@@ -213,7 +213,7 @@ class BEROctetString(BERBase):
 
 
 class BERNull(BERBase):
-    tag = 0x05
+    tag = CLASS_UNIVERSAL | 0x05
     value = None
 
     def __init__(self):
@@ -235,7 +235,7 @@ class BERNull(BERBase):
 
 
 class BERBoolean(BERBase):
-    tag = 0x01
+    tag = CLASS_UNIVERSAL | 0x01
     value: bool
 
     @classmethod
@@ -265,7 +265,7 @@ class BERBoolean(BERBase):
 
 
 class BEREnumerated(BERBase):
-    tag = 0x0A
+    tag = CLASS_UNIVERSAL | 0x0A
     value: enum.IntEnum
     enum_cls: Type[enum.IntEnum]
 
@@ -293,7 +293,7 @@ class BEREnumerated(BERBase):
 
 
 class BERSequence(BERBase, metaclass=abc.ABCMeta):
-    tag = STRUCTURED | 0x10
+    tag = CLASS_UNIVERSAL | STRUCTURED | 0x10
 
     def encode(self, content: List[BERBase]) -> bytes:
         """Helper method to encode the given BERObjects into a BERSequence as bytes."""
@@ -314,7 +314,7 @@ class BERSequenceOf(BERSequence, metaclass=abc.ABCMeta):
 
 
 class BERSet(BERSequence, metaclass=abc.ABCMeta):
-    tag = STRUCTURED | 0x11
+    tag = CLASS_UNIVERSAL | STRUCTURED | 0x11
 
 
 class BERDecoderContext:
