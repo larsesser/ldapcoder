@@ -2,7 +2,7 @@
 
 import abc
 import string
-from typing import Optional, List, Mapping, Type
+from typing import Optional, List, Mapping, Type, Union, Tuple, Callable
 
 from ldaptor.protocols.pureber import (
     BERBoolean,
@@ -20,7 +20,8 @@ from ldaptor.protocols.pureber import (
     berDecodeObject,
     int2berlen,
     UnknownBERTag,
-    BERBase
+    BERBase,
+    STRUCTURED
 )
 from ldaptor._encoder import to_bytes
 
@@ -34,7 +35,7 @@ def alloc_ldap_message_id():
     return r
 
 
-def escape(s):
+def escape(s: str) -> str:
     s = s.replace("\\", r"\5c")
     s = s.replace("*", r"\2a")
     s = s.replace("(", r"\28")
@@ -59,10 +60,29 @@ class LDAPInteger(BERInteger):
     pass
 
 
+# LDAPString ::= OCTET STRING -- UTF-8 encoded,
+#               -- [ISO10646] characters
 class LDAPString(BEROctetString):
-    def __init__(self, *args, **kwargs):
-        self.escaper = kwargs.pop("escaper", escape)
-        super().__init__(*args, **kwargs)
+    value: str
+
+    @classmethod
+    def fromBER(cls, content: bytes) -> "LDAPString":
+        assert len(content) >= 0
+        utf8 = content.decode("utf-8")
+        value = escape(utf8)
+        return cls(value)
+
+    def __init__(self, value: str):
+        super().__init__(value)  # type: ignore
+
+    def toWire(self):
+        encoded = self.value.encode("utf-8")
+        return bytes((self.tag,)) + int2berlen(len(self.value)) + encoded
+
+
+# LDAPDN ::= LDAPString  -- Constrained to <distinguishedName> [RFC4514]
+class LDAPDN(LDAPString):
+    pass
 
 
 class LDAPAttributeValue(BEROctetString):
