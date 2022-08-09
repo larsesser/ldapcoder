@@ -180,11 +180,11 @@ class LDAPProtocolOp(BERBase, metaclass=abc.ABCMeta):
     pass
 
 
-class LDAPProtocolRequest(LDAPProtocolOp):
+class LDAPProtocolRequest(LDAPProtocolOp, metaclass=abc.ABCMeta):
     needs_answer = 1
 
 
-class LDAPProtocolResponse(LDAPProtocolOp):
+class LDAPProtocolResponse(LDAPProtocolOp, metaclass=abc.ABCMeta):
     pass
 
 
@@ -195,74 +195,130 @@ class LDAPBERDecoderContext_LDAPBindRequest(BERDecoderContext):
     }
 
 
-class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 0x00
+# AuthenticationChoice ::= CHOICE {
+#      simple                  [0] OCTET STRING,
+#                -- 1 and 2 reserved
+#      sasl                    [3] SaslCredentials,
+#      ...  }
+class SimpleAuthentication(BEROctetString):
+    tag = CLASS_CONTEXT | 0x00
+
+
+# SaslCredentials ::= SEQUENCE {
+#      mechanism               LDAPString,
+#      credentials             OCTET STRING OPTIONAL }
+class SaslAuthentication(BERSequence):
+    tag = CLASS_CONTEXT | STRUCTURED | 0x03
+    mechanism: str
+    credentials: Optional[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_LDAPBindRequest(fallback=berdecoder)
-        )
+    def fromBER(cls, content: bytes) -> "SaslAuthentication":
+        vals = cls.decode(content)
+        assert len(vals) in {1, 2}
 
-        sasl = False
-        auth = None
-        if isinstance(l[2], BEROctetString):
-            auth = l[2].value
-        elif isinstance(l[2], BERSequence):
-            # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
-            # Credentials are optional and not always provided
-            if len(l[2].data) == 2:
-                auth = (l[2][0].value, l[2][1].value)
-            else:
-                auth = (l[2][0].value, None)
+        mechanism_tag, mechanism_content = vals[0]
+        assert mechanism_tag == LDAPString.tag
+        mechanism = LDAPString.fromBER(mechanism_content).value
+
+        # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
+        # Credentials are optional and not always provided
+        if len(vals) == 1:
+            return cls(mechanism=mechanism, credentials=None)
+
+        credentials_tag, credentials_content = vals[1]
+        assert credentials_tag == BEROctetString.tag
+        credentials = BEROctetString.fromBER(credentials_content).value
+        return cls(mechanism=mechanism, credentials=credentials)
+
+    def __init__(self, mechanism: str, credentials: bytes = None):
+        self.mechanism = mechanism
+        self.credentials = credentials
+
+    def toWire(self) -> bytes:
+        if self.credentials:
+            return self.encode([LDAPString(self.mechanism), BEROctetString(self.credentials)])
+        else:
+            return self.encode([LDAPString(self.mechanism)])
+
+
+# BindRequest ::= [APPLICATION 0] SEQUENCE {
+#      version                 INTEGER (1 ..  127),
+#      name                    LDAPDN,
+#      authentication          AuthenticationChoice }
+class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
+    tag = CLASS_APPLICATION | STRUCTURED | 0x00
+    version: int
+    dn: str
+    auth: Union[bytes, Tuple[str, Optional[bytes]]]
+    sasl: bool
+
+    @classmethod
+    def fromBER(cls, content: bytes) -> "LDAPBindRequest":
+        vals = cls.decode(content)
+        assert len(vals) == 3
+
+        version_tag, version_content = vals[0]
+        assert version_tag == BERInteger.tag
+        version = BERInteger.fromBER(version_content).value
+
+        dn_tag, dn_content = vals[1]
+        assert dn_tag == BEROctetString.tag
+        dn = LDAPDN.fromBER(dn_content).value
+
+        auth_tag, auth_content = vals[2]
+        if auth_tag == SimpleAuthentication.tag:
+            auth = SimpleAuthentication.fromBER(auth_content).value
+            sasl = False
+        elif auth_tag == SaslAuthentication.tag:
+            auth_ = SaslAuthentication.fromBER(auth_content)
+            auth = (auth_.mechanism, auth_.credentials)
             sasl = True
+        else:
+            raise ValueError
 
-        r = klass(version=l[0].value, dn=l[1].value, auth=auth, tag=tag, sasl=sasl)
+        r = cls(version=version, dn=dn, auth=auth, sasl=sasl)
         return r
 
-    def __init__(self, version=None, dn=None, auth=None, tag=None, sasl=False):
+    def __init__(
+        self,
+        version: int = None,
+        dn: str = None,
+        auth: Union[bytes, Tuple[str, Optional[bytes]]] = None,
+        sasl: bool = False,
+    ):
         """Constructor for LDAP Bind Request
 
         For sasl=False, pass a string password for 'auth'
         For sasl=True, pass a tuple of (mechanism, credentials) for 'auth'"""
 
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
+        if version is None:
+            version = 3
         self.version = version
-        if self.version is None:
-            self.version = 3
+        if dn is None:
+            dn = ""
         self.dn = dn
-        if self.dn is None:
-            self.dn = ""
-        self.auth = auth
-        if self.auth is None:
-            self.auth = ""
+        if auth is None:
+            auth = b""
             assert not sasl
+        self.auth = auth
+        # check that the sasl toggle is set iff the auth param is a sasl sequence
+        if not ((not sasl and isinstance(auth, bytes)) or
+                (sasl and isinstance(auth, tuple))):
+            raise ValueError(sasl, auth)
         self.sasl = sasl
 
-    def toWire(self):
-        if not self.sasl:
-            auth_ber = BEROctetString(self.auth, tag=CLASS_CONTEXT | 0)
-        else:
+    def toWire(self) -> bytes:
+        if self.sasl:
+            assert isinstance(self.auth, tuple)
             # since the credentails for SASL is optional must check first
             # if credentials are None don't send them.
-            if self.auth[1]:
-                auth_ber = BERSequence(
-                    [BEROctetString(self.auth[0]), BEROctetString(self.auth[1])],
-                    tag=CLASS_CONTEXT | 3,
-                )
-            else:
-                auth_ber = BERSequence(
-                    [BEROctetString(self.auth[0])], tag=CLASS_CONTEXT | 3
-                )
-        return BERSequence(
-            [
-                BERInteger(self.version),
-                BEROctetString(self.dn),
-                auth_ber,
-            ],
-            tag=self.tag,
-        ).toWire()
+            mechanism = self.auth[0]
+            credentials = self.auth[1] if len(self.auth) > 1 else None
+            auth = SaslAuthentication(mechanism=mechanism, credentials=credentials)
+        else:
+            auth = SimpleAuthentication(self.auth)
+        return self.encode([BERInteger(self.version), LDAPDN(self.dn), auth])
 
     def __repr__(self):
         auth = "*" * len(self.auth)
