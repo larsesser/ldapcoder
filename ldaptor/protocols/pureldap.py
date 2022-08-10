@@ -538,16 +538,11 @@ class LDAPBindResponse(LDAPResult):
         return LDAPResult.__repr__(self)
 
 
+# UnbindRequest ::= [APPLICATION 2] NULL
 class LDAPUnbindRequest(LDAPProtocolRequest, BERNull):
-    tag = CLASS_APPLICATION | 0x02
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x02
     needs_answer = 0
-
-    def __init__(self, *args, **kwargs):
-        LDAPProtocolRequest.__init__(self)
-        BERNull.__init__(self, *args, **kwargs)
-
-    def toWire(self):
-        return BERNull.toWire(self)
 
 
 class LDAPAttributeDescription(BEROctetString):
