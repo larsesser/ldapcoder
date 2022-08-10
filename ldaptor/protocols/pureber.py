@@ -138,25 +138,25 @@ class BERBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     def __len__(self):
-        return len(self.toWire())
+        return len(self.to_wire())
 
     def __eq__(self, other):
         if not isinstance(other, BERBase):
             return NotImplemented
-        return self.toWire() == other.toWire()
+        return self.to_wire() == other.to_wire()
 
     def __ne__(self, other):
         if not isinstance(other, BERBase):
             return NotImplemented
 
-        return self.toWire() != other.toWire()
+        return self.to_wire() != other.to_wire()
 
     def __hash__(self):
-        return hash(self.toWire())
+        return hash(self.to_wire())
 
     @classmethod
     @abc.abstractmethod
-    def fromBER(cls, content: bytes) -> "BERBase":
+    def from_wire(cls, content: bytes) -> "BERBase":
         """Create an instance of this class from a binary string.
 
         This is the default way an instance of this class will be created.
@@ -164,7 +164,7 @@ class BERBase(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def toWire(self) -> bytes:
+    def to_wire(self) -> bytes:
         """Encode the instance of this class to its binary value."""
         raise NotImplementedError
 
@@ -189,7 +189,7 @@ class BERInteger(BERBase):
     value: int
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "BERInteger":
+    def from_wire(cls, content: bytes) -> "BERInteger":
         assert len(content) > 0
         return cls(ber2int(content))
 
@@ -200,7 +200,7 @@ class BERInteger(BERBase):
         assert value is not None
         self.value = value
 
-    def toWire(self):
+    def to_wire(self):
         encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
@@ -220,7 +220,7 @@ class BEROctetString(BERBase):
     value: bytes
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "BEROctetString":
+    def from_wire(cls, content: bytes) -> "BEROctetString":
         assert len(content) >= 0
         return cls(content)
 
@@ -228,7 +228,7 @@ class BEROctetString(BERBase):
         assert value is not None
         self.value = value
 
-    def toWire(self):
+    def to_wire(self):
         return bytes((self.tag,)) + int2berlen(len(self.value)) + self.value
 
     def __repr__(self):
@@ -251,11 +251,11 @@ class BERNull(BERBase):
         pass
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "BERNull":
+    def from_wire(cls, content: bytes) -> "BERNull":
         assert len(content) == 0
         return cls()
 
-    def toWire(self):
+    def to_wire(self):
         return bytes((self.tag,)) + bytes((0,))
 
     def __repr__(self):
@@ -271,7 +271,7 @@ class BERBoolean(BERBase):
     value: bool
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "BERBoolean":
+    def from_wire(cls, content: bytes) -> "BERBoolean":
         assert len(content) > 0
         return cls(bool(ber2int(content)))
 
@@ -282,7 +282,7 @@ class BERBoolean(BERBase):
         assert value is not None
         self.value = value
 
-    def toWire(self):
+    def to_wire(self):
         value = 0xFF if self.value else 0x00
         return bytes((self.tag,)) + int2berlen(1) + bytes((value,))
 
@@ -303,7 +303,7 @@ class BEREnumerated(BERBase):
     enum_cls: Type[enum.IntEnum]
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "BEREnumerated":
+    def from_wire(cls, content: bytes) -> "BEREnumerated":
         assert len(content) > 0
         return cls(ber2int(content))
 
@@ -311,7 +311,7 @@ class BEREnumerated(BERBase):
         assert value is not None
         self.value = self.enum_cls(value)
 
-    def toWire(self):
+    def to_wire(self):
         encoded = int2ber(self.value.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
@@ -332,7 +332,7 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
 
     def encode(self, content: List[BERBase]) -> bytes:
         """Helper method to encode the given BERObjects into a BERSequence as bytes."""
-        vals = b"".join(x.toWire() for x in content)
+        vals = b"".join(x.to_wire() for x in content)
         return bytes((self.tag,)) + int2berlen(len(vals)) + vals
 
     @staticmethod

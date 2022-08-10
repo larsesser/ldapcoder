@@ -67,7 +67,7 @@ class LDAPString(BEROctetString):
     value: str
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "LDAPString":
+    def from_wire(cls, content: bytes) -> "LDAPString":
         assert len(content) >= 0
         utf8 = content.decode("utf-8")
         value = escape(utf8)
@@ -76,7 +76,7 @@ class LDAPString(BEROctetString):
     def __init__(self, value: str):
         super().__init__(value)  # type: ignore
 
-    def toWire(self):
+    def to_wire(self) -> bytes:
         encoded = self.value.encode("utf-8")
         return bytes((self.tag,)) + int2berlen(len(self.value)) + encoded
 
@@ -121,7 +121,7 @@ class LDAPAttributeValue(BEROctetString):
 # maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
 class LDAPMessage(BERSequence):
     """
-    To encode this object in order to be sent over the network use the toWire()
+    To encode this object in order to be sent over the network use the to_wire()
     method.
     """
     msg_id: int
@@ -129,23 +129,23 @@ class LDAPMessage(BERSequence):
     controls: Optional[List["LDAPControl"]]
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "LDAPMessage":
+    def from_wire(cls, content: bytes) -> "LDAPMessage":
         vals = cls.decode(content)
         assert len(vals) in {2, 3}
 
         msg_tag, msg_content = vals[0]
         assert msg_tag == BERInteger.tag
-        msg_id = BERInteger.fromBER(msg_content).value
+        msg_id = BERInteger.from_wire(msg_content).value
 
         operation_tag, operation_content = vals[1]
         if operation_tag not in PROTOCOL_OPERATIONS:
             raise UnknownBERTag(operation_tag)
-        operation = PROTOCOL_OPERATIONS[operation_tag].fromBER(operation_content)
+        operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
 
         if len(vals) == 3:
             controls_tag, controls_content = vals[3]
             assert controls_tag == LDAPControls.tag
-            controls = LDAPControls.fromBER(controls_content).controls
+            controls = LDAPControls.from_wire(controls_content).controls
         else:
             controls = None
 
@@ -161,7 +161,7 @@ class LDAPMessage(BERSequence):
         self.operation = operation
         self.controls = controls
 
-    def toWire(self):
+    def to_wire(self) -> bytes:
         vals = [BERInteger(self.msg_id), self.operation]
         if self.controls is not None:
             vals.append(LDAPControls(self.controls))
@@ -216,13 +216,13 @@ class SaslAuthentication(BERSequence):
     credentials: Optional[bytes]
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "SaslAuthentication":
+    def from_wire(cls, content: bytes) -> "SaslAuthentication":
         vals = cls.decode(content)
         assert len(vals) in {1, 2}
 
         mechanism_tag, mechanism_content = vals[0]
         assert mechanism_tag == LDAPString.tag
-        mechanism = LDAPString.fromBER(mechanism_content).value
+        mechanism = LDAPString.from_wire(mechanism_content).value
 
         # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
         # Credentials are optional and not always provided
@@ -231,14 +231,14 @@ class SaslAuthentication(BERSequence):
 
         credentials_tag, credentials_content = vals[1]
         assert credentials_tag == BEROctetString.tag
-        credentials = BEROctetString.fromBER(credentials_content).value
+        credentials = BEROctetString.from_wire(credentials_content).value
         return cls(mechanism=mechanism, credentials=credentials)
 
     def __init__(self, mechanism: str, credentials: bytes = None):
         self.mechanism = mechanism
         self.credentials = credentials
 
-    def toWire(self) -> bytes:
+    def to_wire(self) -> bytes:
         if self.credentials:
             return self.encode([LDAPString(self.mechanism), BEROctetString(self.credentials)])
         else:
@@ -258,24 +258,24 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     sasl: bool
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "LDAPBindRequest":
+    def from_wire(cls, content: bytes) -> "LDAPBindRequest":
         vals = cls.decode(content)
         assert len(vals) == 3
 
         version_tag, version_content = vals[0]
         assert version_tag == BERInteger.tag
-        version = BERInteger.fromBER(version_content).value
+        version = BERInteger.from_wire(version_content).value
 
         dn_tag, dn_content = vals[1]
         assert dn_tag == BEROctetString.tag
-        dn = LDAPDN.fromBER(dn_content).value
+        dn = LDAPDN.from_wire(dn_content).value
 
         auth_tag, auth_content = vals[2]
         if auth_tag == SimpleAuthentication.tag:
-            auth = SimpleAuthentication.fromBER(auth_content).value
+            auth = SimpleAuthentication.from_wire(auth_content).value
             sasl = False
         elif auth_tag == SaslAuthentication.tag:
-            auth_ = SaslAuthentication.fromBER(auth_content)
+            auth_ = SaslAuthentication.from_wire(auth_content)
             auth = (auth_.mechanism, auth_.credentials)
             sasl = True
         else:
@@ -312,7 +312,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
             raise ValueError(sasl, auth)
         self.sasl = sasl
 
-    def toWire(self) -> bytes:
+    def to_wire(self) -> bytes:
         if self.sasl:
             assert isinstance(self.auth, tuple)
             # since the credentails for SASL is optional must check first
@@ -437,7 +437,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
     referral: Optional[LDAPReferral]
 
     @classmethod
-    def fromBER(cls, content: bytes):
+    def from_wire(cls, content: bytes) -> "LDAPResult":
         vals = cls.decode(content)
         assert 3 <= len(vals) <= 4
 
@@ -472,7 +472,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         self.diagnosticMessage = diagnosticMessage
         self.referral = referral
 
-    def toWire(self):
+    def to_wire(self) -> bytes:
         assert self.referral is None  # TODO
         return self.encode([BEREnumerated(self.resultCode), LDAPDN(self.matchedDN),
                             LDAPString(self.diagnosticMessage)])
