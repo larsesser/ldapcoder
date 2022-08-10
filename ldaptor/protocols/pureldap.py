@@ -2,7 +2,7 @@
 
 import abc
 import string
-from typing import Optional, List, Mapping, Type, Union, Tuple, Callable
+from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar
 
 from ldaptor.protocols.pureber import (
     BERBoolean,
@@ -57,6 +57,22 @@ def smart_escape(s, threshold=0.30):
     return escape(s)
 
 
+def check(statement: bool, msg: str = "") -> None:
+    if not statement:
+        raise ValueError(msg)
+
+
+T = TypeVar("T")
+
+
+def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
+    """Decode a (tag, content) tuple into an instance of the given BER class."""
+    tag, content = input_
+    assert issubclass(class_, BERBase)
+    check(tag == class_.tag)
+    return class_.from_wire(content)
+
+
 class LDAPInteger(BERInteger):
     pass
 
@@ -68,7 +84,7 @@ class LDAPString(BEROctetString):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPString":
-        assert len(content) >= 0
+        check(len(content) >= 0)
         utf8 = content.decode("utf-8")
         value = escape(utf8)
         return cls(value)
@@ -131,30 +147,23 @@ class LDAPMessage(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPMessage":
         vals = cls.decode(content)
-        assert len(vals) in {2, 3}
+        check(len(vals) in {2, 3})
 
-        msg_tag, msg_content = vals[0]
-        assert msg_tag == BERInteger.tag
-        msg_id = BERInteger.from_wire(msg_content).value
+        msg_id = decode(vals[0], BERInteger).value
 
         operation_tag, operation_content = vals[1]
         if operation_tag not in PROTOCOL_OPERATIONS:
             raise UnknownBERTag(operation_tag)
         operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
 
+        controls = None
         if len(vals) == 3:
-            controls_tag, controls_content = vals[3]
-            assert controls_tag == LDAPControls.tag
-            controls = LDAPControls.from_wire(controls_content).controls
-        else:
-            controls = None
+            controls = decode(vals[2], LDAPControls).controls
 
         r = cls(msg_id=msg_id, operation=operation, controls=controls)
         return r
 
     def __init__(self, operation: "LDAPProtocolOp", controls: List["LDAPControl"] = None, msg_id: int = None):
-        assert operation is not None
-
         if msg_id is None:
             msg_id = alloc_ldap_message_id()
         self.msg_id = msg_id
@@ -218,20 +227,15 @@ class SaslAuthentication(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "SaslAuthentication":
         vals = cls.decode(content)
-        assert len(vals) in {1, 2}
+        check(len(vals) in {1, 2})
 
-        mechanism_tag, mechanism_content = vals[0]
-        assert mechanism_tag == LDAPString.tag
-        mechanism = LDAPString.from_wire(mechanism_content).value
-
+        mechanism = decode(vals[0], LDAPString).value
         # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
         # Credentials are optional and not always provided
         if len(vals) == 1:
             return cls(mechanism=mechanism, credentials=None)
 
-        credentials_tag, credentials_content = vals[1]
-        assert credentials_tag == BEROctetString.tag
-        credentials = BEROctetString.from_wire(credentials_content).value
+        credentials = decode(vals[1], BEROctetString).value
         return cls(mechanism=mechanism, credentials=credentials)
 
     def __init__(self, mechanism: str, credentials: bytes = None):
@@ -260,15 +264,10 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindRequest":
         vals = cls.decode(content)
-        assert len(vals) == 3
+        check(len(vals) == 3)
 
-        version_tag, version_content = vals[0]
-        assert version_tag == BERInteger.tag
-        version = BERInteger.from_wire(version_content).value
-
-        dn_tag, dn_content = vals[1]
-        assert dn_tag == BEROctetString.tag
-        dn = LDAPDN.from_wire(dn_content).value
+        version = decode(vals[0], BERInteger).value
+        dn = decode(vals[1], LDAPDN).value
 
         auth_tag, auth_content = vals[2]
         if auth_tag == SimpleAuthentication.tag:
@@ -439,19 +438,11 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPResult":
         vals = cls.decode(content)
-        assert 3 <= len(vals) <= 4
+        check(3 <= len(vals) <= 4)
 
-        resultCode_tag, resultCode_content = vals[0]
-        assert resultCode_tag == BEREnumerated.tag
-        resultCode = BEREnumerated.fromBER(resultCode_content).value
-
-        matchedDN_tag, matchedDN_content = vals[1]
-        assert matchedDN_tag == LDAPDN.tag
-        matchedDN = LDAPDN.fromBER(matchedDN_content).value
-
-        diagnosticMessage_tag, diagnosticMessage_content = vals[2]
-        assert diagnosticMessage_tag == LDAPString.tag
-        diagnosticMessage = LDAPString.fromBER(diagnosticMessage_content).value
+        resultCode = decode(vals[0], BEREnumerated).value
+        matchedDN = decode(vals[1], LDAPDN).value
+        diagnosticMessage = decode(vals[2], LDAPString).value
 
         referral = None
         if len(vals) == 4:
