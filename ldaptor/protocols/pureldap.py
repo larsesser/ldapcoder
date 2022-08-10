@@ -1171,24 +1171,21 @@ class LDAPSearchResultDone(LDAPResult):
 
 # Controls ::= SEQUENCE OF control Control
 class LDAPControls(BERSequence):
-    tag = CLASS_CONTEXT | STRUCTURED | 0x00
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x00
     controls: List["LDAPControl"]
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "LDAPControls":
-        vals = cls.decode(content)
-        controls = []
-        for val in vals:
-            control_tag, control_content = val
-            assert control_tag == LDAPControl.tag
-            controls.append(LDAPControl.fromBER(control_content))
+    def from_wire(cls, content: bytes) -> "LDAPControls":
+        vals = cls.unwrap(content)
+        controls = [decode(val, LDAPControl) for val in vals]
         return cls(controls)
 
     def __init__(self, controls: List["LDAPControl"]):
         self.controls = controls
 
-    def toWire(self) -> bytes:
-        return self.encode(self.controls)
+    def to_wire(self) -> bytes:
+        return self.wrap(self.controls)
 
 
 # Control ::= SEQUENCE {
@@ -1196,56 +1193,49 @@ class LDAPControls(BERSequence):
 #      criticality             BOOLEAN DEFAULT FALSE,
 #      controlValue            OCTET STRING OPTIONAL }
 class LDAPControl(BERSequence):
-    tag = CLASS_CONTEXT | STRUCTURED | 0x00
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x00
     controlType: bytes
     criticality: Optional[bool]
     controlValue: Optional[bytes]
 
     @classmethod
-    def fromBER(cls, content: bytes) -> "LDAPControl":
-        vals = cls.decode(content)
-        assert 1 <= len(vals) <= 3
+    def from_wire(cls, content: bytes) -> "LDAPControl":
+        vals = cls.unwrap(content)
+        check(1 <= len(vals) <= 3)
 
-        controlType_tag, controlType_content = vals[0]
-        assert controlType_tag == LDAPOID.tag
-        controlType = LDAPOID.fromBER(controlType_content).value
+        controlType = decode(vals[0], LDAPOID).value
 
         criticality = None
         controlValue = None
         if len(vals) == 2:
-            unknown_tag, unknown_content = vals[1]
+            unknown_tag, _ = vals[1]
             if unknown_tag == BERBoolean.tag:
-                criticality = BERBoolean.fromBER(unknown_content).value
+                criticality = decode(vals[1], BERBoolean).value
             elif unknown_tag == BEROctetString.tag:
-                controlValue = BEROctetString.fromBER(unknown_content).value
+                controlValue = decode(vals[1], BEROctetString).value
             else:
                 raise UnknownBERTag(unknown_tag)
-        else:
-            criticality_tag, criticality_content = vals[1]
-            assert criticality_tag == BERBoolean.tag
-            criticality = BERBoolean.fromBER(criticality_content).value
-
-            controlValue_tag, controlValue_content = vals[2]
-            assert controlValue_tag == BEROctetString.tag
-            controlValue = BEROctetString.fromBER(controlType_content).value
+        elif len(vals) == 3:
+            criticality = decode(vals[1], BERBoolean).value
+            controlValue = decode(vals[2], BEROctetString).value
 
         return cls(controlType=controlType, criticality=criticality, controlValue=controlValue)
 
     def __init__(
         self, controlType: bytes, criticality: bool = None, controlValue: bytes = None
     ):
-        assert controlType is not None
         self.controlType = controlType
         self.criticality = criticality
         self.controlValue = controlValue
 
-    def toWire(self):
+    def to_wire(self):
         vals = [LDAPOID(self.controlType)]
         if self.criticality is not None:
             vals.append(BERBoolean(self.criticality))
         if self.controlValue is not None:
             vals.append(BEROctetString(self.controlValue))
-        return self.encode(vals)
+        return self.wrap(vals)
 
 
 class LDAPBERDecoderContext_LDAPControls(BERDecoderContext):
