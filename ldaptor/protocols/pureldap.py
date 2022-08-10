@@ -469,7 +469,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-class LDAPBindResponse_serverSaslCreds(BEROctetString):
+class ServerSaslCreds(BEROctetString):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x07
 
@@ -483,70 +483,56 @@ class LDAPBindResponse_serverSaslCreds(BEROctetString):
             )
 
 
-class LDAPBERDecoderContext_BindResponse(BERDecoderContext):
-    Identities = {
-        LDAPBindResponse_serverSaslCreds.tag: LDAPBindResponse_serverSaslCreds,
-    }
-
-
+# BindResponse ::= [APPLICATION 1] SEQUENCE {
+#      COMPONENTS OF LDAPResult,
+#      serverSaslCreds    [7] OCTET STRING OPTIONAL }
 class LDAPBindResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 0x01
-
-    resultCode = None
-    matchedDN = None
-    errorMessage = None
-    referral = None
-    serverSaslCreds = None
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x01
+    serverSaslCreds: Optional[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_BindResponse(fallback=berdecoder)
-        )
+    def from_wire(cls, content: bytes) -> "LDAPBindResponse":
+        vals = cls.unwrap(content)
+        check(3 <= len(vals) <= 5)
 
-        assert 3 <= len(l) <= 4
-
-        try:
-            if isinstance(l[3], LDAPBindResponse_serverSaslCreds):
-                serverSaslCreds = l[3].value
-            else:
-                serverSaslCreds = None
-        except IndexError:
-            serverSaslCreds = None
+        resultCode = decode(vals[0], BEREnumerated).value
+        matchedDN = decode(vals[1], LDAPDN).value
+        diagnosticMessage = decode(vals[2], LDAPString).value
 
         referral = None
-        # if (l[3:] and isinstance(l[3], LDAPReferral)):
-        # TODO support referrals
-        # self.referral=self.data[0]
+        serverSaslCreds = None
+        if len(vals) == 4:
+            unknown_tag, unknown_content = vals[3]
+            if unknown_tag == LDAPReferral.tag:
+                raise NotImplementedError("Not yet supported.")
+            elif unknown_tag == ServerSaslCreds.tag:
+                serverSaslCreds = decode(vals[3], ServerSaslCreds).value
+            else:
+                raise UnknownBERTag
+        elif len(vals) == 5:
+            referral = decode(vals[3], LDAPReferral)
+            serverSaslCreds = decode(vals[4], ServerSaslCreds).value
 
-        r = klass(
-            resultCode=l[0].value,
-            matchedDN=l[1].value,
-            errorMessage=l[2].value,
+        r = cls(
+            resultCode=resultCode,
+            matchedDN=matchedDN,
+            diagnosticMessage=diagnosticMessage,
             referral=referral,
             serverSaslCreds=serverSaslCreds,
-            tag=tag,
         )
         return r
 
     def __init__(
         self,
-        resultCode=None,
-        matchedDN=None,
-        errorMessage=None,
+        resultCode: int,
+        matchedDN: str,
+        diagnosticMessage: str,
         referral=None,
-        serverSaslCreds=None,
-        tag=None,
+        serverSaslCreds: bytes = None,
     ):
-        LDAPResult.__init__(
-            self,
-            resultCode=resultCode,
-            matchedDN=matchedDN,
-            errorMessage=errorMessage,
-            referral=referral,
-            serverSaslCreds=serverSaslCreds,
-            tag=None,
-        )
+        super().__init__(resultCode, matchedDN, diagnosticMessage, referral)
+        self.serverSaslCreds = serverSaslCreds
 
     def __repr__(self):
         return LDAPResult.__repr__(self)
