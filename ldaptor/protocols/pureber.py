@@ -296,23 +296,27 @@ class BERBoolean(BERBase):
             )
 
 
-class BEREnumerated(BERBase):
+class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x0A
     value: enum.IntEnum
-    enum_cls: Type[enum.IntEnum]
+
+    @classmethod
+    @abc.abstractmethod
+    def enum_cls(cls) -> Type[enum.IntEnum]:
+        raise NotImplementedError
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BEREnumerated":
         assert len(content) > 0
-        return cls(ber2int(content))
+        return cls(cls.enum_cls()(ber2int(content)))
 
-    def __init__(self, value: int):
+    def __init__(self, value: enum.IntEnum):
         assert value is not None
-        self.value = self.enum_cls(value)
+        self.value = value
 
     def to_wire(self):
-        encoded = int2ber(self.value.value)
+        encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
     def __repr__(self):
