@@ -326,44 +326,9 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
 # Referral ::= SEQUENCE SIZE (1..MAX) OF uri URI
 # URI ::= LDAPString     -- limited to characters permitted in URIs
+# TODO implement
 class LDAPReferral(BERSequence):
     pass
-
-
-class LDAPBERDecoderContext_LDAPSearchResultReference(BERDecoderContext):
-    Identities = {
-        BEROctetString.tag: LDAPString,
-    }
-
-
-class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
-    _tag_class = TagClasses.APPLICATION
-    _tag = 0x13
-
-    def __init__(self, uris=None, tag=None):
-        LDAPProtocolResponse.__init__(self)
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert uris is not None
-        self.uris = uris
-
-    @classmethod
-    def fromBER(cls, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content,
-            LDAPBERDecoderContext_LDAPSearchResultReference(fallback=berdecoder),
-        )
-        r = cls(uris=l)
-        return r
-
-    def toWire(self):
-        return BERSequence(BERSequence(self.uris), tag=self.tag).toWire()
-
-    def __repr__(self):
-        return "{}(uris={}{})".format(
-            self.__class__.__name__,
-            repr([uri for uri in self.uris]),
-            f", tag={self.tag}" if self.tag != self.__class__.tag else "",
-        )
 
 
 class LDAPException(Exception):
@@ -1113,9 +1078,39 @@ class LDAPBERDecoderContext_Filter(BERDecoderContext):
     }
 
 
+class SearchScopes(enum.IntEnum):
+    baseObject = 0
+    singleLevel = 1
+    wholeSubtree = 2
+
+
+class LDAPSearchScope(BEREnumerated):
+    value: SearchScopes
+
+    @classmethod
+    def enum_cls(cls) -> Type[enum.IntEnum]:
+        return SearchScopes
+
+
 LDAP_SCOPE_baseObject = 0
 LDAP_SCOPE_singleLevel = 1
 LDAP_SCOPE_wholeSubtree = 2
+
+
+class DerefAliases(enum.IntEnum):
+    neverDerefAliases = 0
+    derefInSearching = 1
+    derefFindingBaseObj = 2
+    derefAlways = 3
+
+
+class LDAPDerefAlias(BEREnumerated):
+    value: DerefAliases
+
+    @classmethod
+    def enum_cls(cls) -> Type[enum.IntEnum]:
+        return DerefAliases
+
 
 LDAP_DEREF_neverDerefAliases = 0
 LDAP_DEREF_derefInSearching = 1
@@ -1125,87 +1120,113 @@ LDAP_DEREF_derefAlways = 3
 LDAPFilterMatchAll = LDAPFilter_present("objectClass")
 
 
-class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 0x03
-
-    baseObject = ""
-    scope = LDAP_SCOPE_wholeSubtree
-    derefAliases = LDAP_DEREF_neverDerefAliases
-    sizeLimit = 0
-    timeLimit = 0
-    typesOnly = 0
-    filter = LDAPFilterMatchAll
-    attributes = []  # TODO AttributeDescriptionList
-
-    # TODO decode
+# AttributeSelection ::= SEQUENCE OF selector LDAPString
+#   -- The LDAPString is constrained to
+#   -- <attributeSelector> in Section 4.5.1.8
+class LDAPAttributeSelection(BERSequence):
+    value: List[str]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content,
-            LDAPBERDecoderContext_Filter(fallback=berdecoder, inherit=berdecoder),
-        )
+    def from_wire(cls, content: bytes) -> "LDAPAttributeSelection":
+        value = [decode(val, LDAPString).value for val in cls.unwrap(content)]
+        return cls(value)
 
-        assert 8 <= len(l) <= 8
-        r = klass(
-            baseObject=l[0].value,
-            scope=l[1].value,
-            derefAliases=l[2].value,
-            sizeLimit=l[3].value,
-            timeLimit=l[4].value,
-            typesOnly=l[5].value,
-            filter=l[6],
-            attributes=[x.value for x in l[7]],
-            tag=tag,
+    def __init__(self, value: List[str]):
+        self.value = value
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPString(val) for val in self.value])
+
+
+# SearchRequest ::= [APPLICATION 3] SEQUENCE {
+#      baseObject      LDAPDN,
+#      scope           ENUMERATED {
+#           baseObject              (0),
+#           singleLevel             (1),
+#           wholeSubtree            (2),
+#           ...  },
+#      derefAliases    ENUMERATED {
+#           neverDerefAliases       (0),
+#           derefInSearching        (1),
+#           derefFindingBaseObj     (2),
+#           derefAlways             (3) },
+#      sizeLimit       INTEGER (0 ..  maxInt),
+#      timeLimit       INTEGER (0 ..  maxInt),
+#      typesOnly       BOOLEAN,
+#      filter          Filter,
+#      attributes      AttributeSelection }
+class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x03
+
+    baseObject: str
+    scope: SearchScopes
+    derefAliases: DerefAliases
+    sizeLimit: int
+    timeLimit: int
+    typesOnly: bool
+    filter: LDAPFilter
+    attributes: List[str]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPSearchRequest":
+        vals = cls.unwrap(content)
+        check(len(vals) == 8)
+
+        baseObject = decode(vals[0], LDAPDN).value
+        scope = decode(vals[1], LDAPSearchScope).value
+        derefAlias = decode(vals[2], LDAPDerefAlias).value
+        sizeLimit = decode(vals[3], BERInteger).value
+        timeLimit = decode(vals[4], BERInteger).value
+        typesOnly = decode(vals[5], BERBoolean).value
+        filter_tag, filter_content = vals[6]
+        if filter_tag not in FILTERS:
+            raise UnknownBERTag(filter_tag)
+        filter_ = FILTERS[filter_tag].from_wire(filter_content)
+        attributes = decode(vals[7], LDAPAttributeSelection).value
+
+        return cls(
+            baseObject=baseObject,
+            scope=scope,
+            derefAliases=derefAlias,
+            sizeLimit=sizeLimit,
+            timeLimit=timeLimit,
+            typesOnly=typesOnly,
+            filter_=filter_,
+            attributes=attributes,
         )
-        return r
 
     def __init__(
         self,
-        baseObject=None,
-        scope=None,
-        derefAliases=None,
-        sizeLimit=None,
-        timeLimit=None,
-        typesOnly=None,
-        filter=None,
-        attributes=None,
-        tag=None,
+        baseObject: str,
+        scope: SearchScopes,
+        derefAliases: DerefAliases,
+        sizeLimit: int,
+        timeLimit: int,
+        typesOnly: bool,
+        filter_: LDAPFilter,
+        attributes: List[str],
     ):
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
+        self.baseObject = baseObject
+        self.scope = scope
+        self.derefAliases = derefAliases
+        self.sizeLimit = sizeLimit
+        self.timeLimit = timeLimit
+        self.typesOnly = typesOnly
+        self.filter = filter_
+        self.attributes = attributes
 
-        if baseObject is not None:
-            self.baseObject = baseObject
-        if scope is not None:
-            self.scope = scope
-        if derefAliases is not None:
-            self.derefAliases = derefAliases
-        if sizeLimit is not None:
-            self.sizeLimit = sizeLimit
-        if timeLimit is not None:
-            self.timeLimit = timeLimit
-        if typesOnly is not None:
-            self.typesOnly = typesOnly
-        if filter is not None:
-            self.filter = filter
-        if attributes is not None:
-            self.attributes = attributes
-
-    def toWire(self):
-        return BERSequence(
-            [
-                BEROctetString(self.baseObject),
-                BEREnumerated(self.scope),
-                BEREnumerated(self.derefAliases),
-                BERInteger(self.sizeLimit),
-                BERInteger(self.timeLimit),
-                BERBoolean(self.typesOnly),
-                self.filter,
-                BERSequenceOf(map(BEROctetString, self.attributes)),
-            ],
-            tag=self.tag,
-        ).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([
+            LDAPDN(self.baseObject),
+            LDAPSearchScope(self.scope),
+            LDAPDerefAlias(self.derefAliases),
+            BERInteger(self.sizeLimit),
+            BERInteger(self.timeLimit),
+            BERBoolean(self.typesOnly),
+            self.filter,
+            LDAPAttributeSelection(self.attributes),
+        ])
 
     def __repr__(self):
         base = self.baseObject
@@ -1243,49 +1264,87 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             )
 
 
-class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
-    tag = CLASS_APPLICATION | 0x04
+class LDAPAttributeValueSet(BERSequence):
+    value: List[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content,
-            LDAPBERDecoderContext_Filter(fallback=berdecoder, inherit=berdecoder),
-        )
+    def from_wire(cls, content: bytes) -> "LDAPAttributeValueSet":
+        value = [decode(val, LDAPAttributeValue).value for val in cls.unwrap(content)]
+        return cls(value)
 
-        objectName = l[0].value
-        attributes = []
-        for attr, li in l[1].data:
-            attributes.append((attr.value, [x.value for x in li]))
-        r = klass(objectName=objectName, attributes=attributes, tag=tag)
-        return r
+    def __init__(self, value: List[bytes]):
+        self.value = value
 
-    def __init__(self, objectName, attributes, tag=None):
-        LDAPProtocolResponse.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
-        assert objectName is not None
-        assert attributes is not None
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPAttributeValue(val) for val in self.value])
+
+
+# PartialAttribute ::= SEQUENCE {
+#      type       AttributeDescription,
+#      vals       SET OF value AttributeValue }
+class LDAPPartialAttribute(BERSequence):
+    type_: str
+    values: List[bytes]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPPartialAttribute":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        type_ = decode(vals[0], LDAPAttributeDescription).value
+        values = decode(vals[1], LDAPAttributeValueSet).value
+        return cls(type_=type_, values=values)
+
+    def __init__(self, type_: str, values: List[bytes]):
+        self.type_ = type_
+        self.values = values
+
+    def to_wire(self) -> bytes:
+        return self.wrap([
+            LDAPAttributeDescription(self.type_), LDAPAttributeValueSet(self.values)])
+
+
+# PartialAttributeList ::= SEQUENCE OF
+#        partialAttribute PartialAttribute
+class LDAPPartialAttributeList(BERSequence):
+    value: List[LDAPPartialAttribute]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPPartialAttributeList":
+        value = [decode(val, LDAPPartialAttribute) for val in cls.unwrap(content)]
+        return cls(value)
+
+    def __init__(self, value: List[LDAPPartialAttribute]):
+        self.value = value
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPPartialAttribute(val) for val in self.value])
+
+
+# SearchResultEntry ::= [APPLICATION 4] SEQUENCE {
+#      objectName      LDAPDN,
+#      attributes      PartialAttributeList }
+class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x04
+
+    objectName: str
+    attributes: List[LDAPPartialAttribute]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPSearchResultEntry":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        objectName = decode(vals[0], LDAPDN).value
+        attributes = decode(vals[1], LDAPPartialAttributeList).value
+        return cls(objectName=objectName, attributes=attributes)
+
+    def __init__(self, objectName: str, attributes: List[LDAPPartialAttribute]):
         self.objectName = objectName
         self.attributes = attributes
 
-    def toWire(self):
-        return BERSequence(
-            [
-                BEROctetString(self.objectName),
-                BERSequence(
-                    [
-                        BERSequence(
-                            [
-                                BEROctetString(attr_li[0]),
-                                BERSet([BEROctetString(x) for x in attr_li[1]]),
-                            ]
-                        )
-                        for attr_li in self.attributes
-                    ]
-                ),
-            ],
-            tag=self.tag,
-        ).toWire()
+    def to_wire(self):
+        return self.wrap([
+            LDAPDN(self.objectName), LDAPPartialAttributeList(self.attributes)])
 
     def __repr__(self):
         name = self.objectName
@@ -1298,8 +1357,18 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
         )
 
 
+# SearchResultReference ::= [APPLICATION 19] SEQUENCE
+#             SIZE (1..MAX) OF uri URI
+# TODO implement
+class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x19
+
+
+# SearchResultDone ::= [APPLICATION 5] LDAPResult
 class LDAPSearchResultDone(LDAPResult):
-    tag = CLASS_APPLICATION | 0x05
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x05
 
 
 # Controls ::= SEQUENCE OF control Control
