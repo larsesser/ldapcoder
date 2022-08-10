@@ -283,27 +283,14 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         r = cls(version=version, dn=dn, auth=auth, sasl=sasl)
         return r
 
-    def __init__(
-        self,
-        version: int = None,
-        dn: str = None,
-        auth: Union[bytes, Tuple[str, Optional[bytes]]] = None,
-        sasl: bool = False,
-    ):
+    def __init__(self, version: int, dn: str,
+                 auth: Union[bytes, Tuple[str, Optional[bytes]]], sasl: bool = False):
         """Constructor for LDAP Bind Request
 
         For sasl=False, pass a string password for 'auth'
         For sasl=True, pass a tuple of (mechanism, credentials) for 'auth'"""
-
-        if version is None:
-            version = 3
         self.version = version
-        if dn is None:
-            dn = ""
         self.dn = dn
-        if auth is None:
-            auth = b""
-            assert not sasl
         self.auth = auth
         # check that the sasl toggle is set iff the auth param is a sasl sequence
         if not ((not sasl and isinstance(auth, bytes)) or
