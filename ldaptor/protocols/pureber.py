@@ -102,8 +102,36 @@ def ber2int(e: bytes, signed: bool = True) -> int:
     return v
 
 
+class ClassProperty(object):
+    def __init__(self, fget):
+        self.fget = fget
+
+    def __get__(self, obj, class_=None):
+        if class_ is None:
+            class_ = type(obj)
+        return self.fget.__get__(obj, class_)()
+
+
+class TagClasses(enum.IntEnum):
+    UNIVERSAL = 0x00
+    APPLICATION = 0x40
+    CONTEXT = 0x80
+    PRIVATE = 0xC0
+
+
 class BERBase(metaclass=abc.ABCMeta):
-    tag: int
+    _tag_class: TagClasses
+    _tag_is_constructed: bool = False
+    _tag: int
+
+    @classmethod
+    def __tag(cls) -> int:
+        constructed = 0x00
+        if cls._tag_is_constructed:
+            constructed = 0x20
+        return cls._tag_class | constructed | cls._tag
+
+    tag = ClassProperty(__tag)
 
     @abc.abstractmethod
     def __init__(self):
@@ -156,7 +184,8 @@ def need(buf: bytes, n: int) -> None:
 
 
 class BERInteger(BERBase):
-    tag = CLASS_UNIVERSAL | 0x02
+    _tag_class = TagClasses.UNIVERSAL
+    _tag = 0x02
     value: int
 
     @classmethod
@@ -186,7 +215,8 @@ class BERInteger(BERBase):
 
 
 class BEROctetString(BERBase):
-    tag = CLASS_UNIVERSAL | 0x04
+    _tag_class = TagClasses.UNIVERSAL
+    _tag = 0x04
     value: bytes
 
     @classmethod
@@ -213,7 +243,8 @@ class BEROctetString(BERBase):
 
 
 class BERNull(BERBase):
-    tag = CLASS_UNIVERSAL | 0x05
+    _tag_class = TagClasses.UNIVERSAL
+    _tag = 0x05
     value = None
 
     def __init__(self):
@@ -235,7 +266,8 @@ class BERNull(BERBase):
 
 
 class BERBoolean(BERBase):
-    tag = CLASS_UNIVERSAL | 0x01
+    _tag_class = TagClasses.UNIVERSAL
+    _tag = 0x01
     value: bool
 
     @classmethod
@@ -265,7 +297,8 @@ class BERBoolean(BERBase):
 
 
 class BEREnumerated(BERBase):
-    tag = CLASS_UNIVERSAL | 0x0A
+    _tag_class = TagClasses.UNIVERSAL
+    _tag = 0x0A
     value: enum.IntEnum
     enum_cls: Type[enum.IntEnum]
 
@@ -293,7 +326,9 @@ class BEREnumerated(BERBase):
 
 
 class BERSequence(BERBase, metaclass=abc.ABCMeta):
-    tag = CLASS_UNIVERSAL | STRUCTURED | 0x10
+    _tag_class = TagClasses.UNIVERSAL
+    _tag_is_constructed = True
+    _tag = 0x10
 
     def encode(self, content: List[BERBase]) -> bytes:
         """Helper method to encode the given BERObjects into a BERSequence as bytes."""
@@ -314,7 +349,9 @@ class BERSequenceOf(BERSequence, metaclass=abc.ABCMeta):
 
 
 class BERSet(BERSequence, metaclass=abc.ABCMeta):
-    tag = CLASS_UNIVERSAL | STRUCTURED | 0x11
+    _tag_class = TagClasses.UNIVERSAL
+    _tag_is_constructed = True
+    _tag = 0x11
 
 
 class BERDecoderContext:

@@ -21,7 +21,8 @@ from ldaptor.protocols.pureber import (
     int2berlen,
     UnknownBERTag,
     BERBase,
-    STRUCTURED
+    STRUCTURED,
+    TagClasses,
 )
 from ldaptor._encoder import to_bytes
 
@@ -201,14 +202,16 @@ class LDAPBERDecoderContext_LDAPBindRequest(BERDecoderContext):
 #      sasl                    [3] SaslCredentials,
 #      ...  }
 class SimpleAuthentication(BEROctetString):
-    tag = CLASS_CONTEXT | 0x00
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x00
 
 
 # SaslCredentials ::= SEQUENCE {
 #      mechanism               LDAPString,
 #      credentials             OCTET STRING OPTIONAL }
 class SaslAuthentication(BERSequence):
-    tag = CLASS_CONTEXT | STRUCTURED | 0x03
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x03
     mechanism: str
     credentials: Optional[bytes]
 
@@ -247,7 +250,8 @@ class SaslAuthentication(BERSequence):
 #      name                    LDAPDN,
 #      authentication          AuthenticationChoice }
 class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | STRUCTURED | 0x00
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x00
     version: int
     dn: str
     auth: Union[bytes, Tuple[str, Optional[bytes]]]
@@ -345,7 +349,8 @@ class LDAPBERDecoderContext_LDAPSearchResultReference(BERDecoderContext):
 
 
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
-    tag = CLASS_APPLICATION | 0x13
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x13
 
     def __init__(self, uris=None, tag=None):
         LDAPProtocolResponse.__init__(self)
@@ -487,7 +492,8 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
 
 class LDAPBindResponse_serverSaslCreds(BEROctetString):
-    tag = CLASS_CONTEXT | 0x07
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x07
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
