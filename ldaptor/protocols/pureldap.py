@@ -764,7 +764,8 @@ class LDAPFilter_equalityMatch(LDAPAttributeValueAssertion, LDAPFilter):
             "("
             + self.attributeDesc
             + "="
-            + escape(self.assertionValue)
+            # TODO is this assumption reasonable? Same question for the following cases.
+            + escape(self.assertionValue.decode("utf-8"))
             + ")"
         )
 
@@ -774,7 +775,7 @@ class LDAPFilter_substrings_string(LDAPAssertionValue):
 
     @property
     def as_text(self) -> str:
-        return escape(self.value)
+        return escape(self.value.decode("utf-8"))
 
 
 class LDAPFilter_substrings_initial(LDAPFilter_substrings_string):
@@ -903,7 +904,7 @@ class LDAPFilter_greaterOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
             "("
             + self.attributeDesc
             + ">="
-            + escape(self.assertionValue)
+            + escape(self.assertionValue.decode("utf-8"))
             + ")"
         )
 
@@ -917,7 +918,7 @@ class LDAPFilter_lessOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
             "("
             + self.attributeDesc
             + "<="
-            + escape(self.assertionValue)
+            + escape(self.assertionValue.decode("utf-8"))
             + ")"
         )
 
@@ -927,7 +928,7 @@ class LDAPFilter_present(LDAPAttributeDescription, LDAPFilter):
 
     @property
     def as_text(self) -> str:
-        return "(%s=*)" % self.value
+        return "(" + self.value + "=*)"
 
 
 class LDAPFilter_approxMatch(LDAPAttributeValueAssertion, LDAPFilter):
@@ -939,7 +940,7 @@ class LDAPFilter_approxMatch(LDAPAttributeValueAssertion, LDAPFilter):
             "("
             + self.attributeDesc
             + "~="
-            + escape(self.assertionValue)
+            + escape(self.assertionValue.decode("utf-8"))
             + ")"
         )
 
