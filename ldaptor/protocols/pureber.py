@@ -330,14 +330,14 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
     _tag_is_constructed = True
     _tag = 0x10
 
-    def encode(self, content: List[BERBase]) -> bytes:
-        """Helper method to encode the given BERObjects into a BERSequence as bytes."""
+    def wrap(self, content: List[BERBase]) -> bytes:
+        """Helper method to wrap the given BERObjects into a BERSequence."""
         vals = b"".join(x.to_wire() for x in content)
         return bytes((self.tag,)) + int2berlen(len(vals)) + vals
 
     @staticmethod
-    def decode(content: bytes) -> List[Tuple[int, bytes]]:
-        """Helper method to decode the given bytes into elements tags and contents."""
+    def unwrap(content: bytes) -> List[Tuple[int, bytes]]:
+        """Helper method to unwrap the given BERSequence into (tags, contents)."""
         vals, bytes_used = berUnwrap(content)
         if bytes_used != len(content):
             raise BERExceptionInsufficientData

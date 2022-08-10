@@ -146,7 +146,7 @@ class LDAPMessage(BERSequence):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPMessage":
-        vals = cls.decode(content)
+        vals = cls.unwrap(content)
         check(len(vals) in {2, 3})
 
         msg_id = decode(vals[0], BERInteger).value
@@ -174,7 +174,7 @@ class LDAPMessage(BERSequence):
         vals = [BERInteger(self.msg_id), self.operation]
         if self.controls is not None:
             vals.append(LDAPControls(self.controls))
-        return self.encode(vals)
+        return self.wrap(vals)
 
     def __repr__(self):
         l = []
@@ -226,7 +226,7 @@ class SaslAuthentication(BERSequence):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "SaslAuthentication":
-        vals = cls.decode(content)
+        vals = cls.unwrap(content)
         check(len(vals) in {1, 2})
 
         mechanism = decode(vals[0], LDAPString).value
@@ -243,10 +243,10 @@ class SaslAuthentication(BERSequence):
         self.credentials = credentials
 
     def to_wire(self) -> bytes:
+        ret = [LDAPString(self.mechanism)]
         if self.credentials:
-            return self.encode([LDAPString(self.mechanism), BEROctetString(self.credentials)])
-        else:
-            return self.encode([LDAPString(self.mechanism)])
+            ret.append(BEROctetString(self.credentials))
+        return self.wrap(ret)
 
 
 # BindRequest ::= [APPLICATION 0] SEQUENCE {
@@ -263,7 +263,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindRequest":
-        vals = cls.decode(content)
+        vals = cls.unwrap(content)
         check(len(vals) == 3)
 
         version = decode(vals[0], BERInteger).value
@@ -321,7 +321,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
             auth = SaslAuthentication(mechanism=mechanism, credentials=credentials)
         else:
             auth = SimpleAuthentication(self.auth)
-        return self.encode([BERInteger(self.version), LDAPDN(self.dn), auth])
+        return self.wrap([BERInteger(self.version), LDAPDN(self.dn), auth])
 
     def __repr__(self):
         auth = "*" * len(self.auth)
@@ -437,7 +437,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPResult":
-        vals = cls.decode(content)
+        vals = cls.unwrap(content)
         check(3 <= len(vals) <= 4)
 
         resultCode = decode(vals[0], BEREnumerated).value
@@ -465,8 +465,8 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
     def to_wire(self) -> bytes:
         assert self.referral is None  # TODO
-        return self.encode([BEREnumerated(self.resultCode), LDAPDN(self.matchedDN),
-                            LDAPString(self.diagnosticMessage)])
+        return self.wrap([BEREnumerated(self.resultCode), LDAPDN(self.matchedDN),
+                          LDAPString(self.diagnosticMessage)])
 
     def __repr__(self):
         l = []
