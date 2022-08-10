@@ -24,6 +24,7 @@ from ldaptor.protocols.pureber import (
     BERBase,
     STRUCTURED,
     TagClasses,
+    berUnwrap,
 )
 from ldaptor._encoder import to_bytes
 
@@ -631,32 +632,40 @@ class LDAPUnbindRequest(LDAPProtocolRequest, BERNull):
     needs_answer = 0
 
 
-class LDAPAttributeDescription(BEROctetString):
+# AttributeDescription ::= LDAPString
+#           -- Constrained to <attributedescription>
+#           -- [RFC4512]
+class LDAPAttributeDescription(LDAPString):
     pass
 
 
+# AssertionValue ::= OCTET STRING
+class LDAPAssertionValue(BEROctetString):
+    pass
+
+
+# AttributeValueAssertion ::= SEQUENCE {
+#      attributeDesc   AttributeDescription,
+#      assertionValue  AssertionValue }
 class LDAPAttributeValueAssertion(BERSequence):
+    attributeDesc: str
+    assertionValue: bytes
+
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
-        assert len(l) == 2
+    def from_wire(cls, content: bytes) -> "LDAPAttributeValueAssertion":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        attributeDesc = decode(vals[0], LDAPAttributeDescription).value
+        assertionValue = decode(vals[1], LDAPAssertionValue).value
+        return cls(attributeDesc=attributeDesc, assertionValue=assertionValue)
 
-        r = klass(attributeDesc=l[0], assertionValue=l[1], tag=tag)
-        return r
-
-    def __init__(
-        self, attributeDesc=None, assertionValue=None, tag=None, escaper=escape
-    ):
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert attributeDesc is not None
+    def __init__(self, attributeDesc: str, assertionValue: bytes):
         self.attributeDesc = attributeDesc
         self.assertionValue = assertionValue
-        self.escaper = escaper
 
-    def toWire(self):
-        return BERSequence(
-            [self.attributeDesc, self.assertionValue], tag=self.tag
-        ).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPAttributeDescription(self.attributeDesc),
+                          LDAPAssertionValue(self.assertionValue)])
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
@@ -675,63 +684,92 @@ class LDAPAttributeValueAssertion(BERSequence):
             )
 
 
-class LDAPFilter(BERStructured):
-    def __init__(self, tag=None):
-        BERStructured.__init__(self, tag=tag)
+# Filter ::= CHOICE {
+#      and             [0] SET SIZE (1..MAX) OF filter Filter,
+#      or              [1] SET SIZE (1..MAX) OF filter Filter,
+#      not             [2] Filter,
+#      equalityMatch   [3] AttributeValueAssertion,
+#      substrings      [4] SubstringFilter,
+#      greaterOrEqual  [5] AttributeValueAssertion,
+#      lessOrEqual     [6] AttributeValueAssertion,
+#      present         [7] AttributeDescription,
+#      approxMatch     [8] AttributeValueAssertion,
+#      extensibleMatch [9] MatchingRuleAssertion,
+#      ...  }
+class LDAPFilter(BERBase, metaclass=abc.ABCMeta):
+    _tag_class = TagClasses.CONTEXT
+
+    @abc.abstractmethod
+    @property
+    def as_text(self) -> str:
+        raise NotImplementedError
 
 
-class LDAPFilterSet(BERSet):
+class LDAPFilterSet(BERSet, LDAPFilter, metaclass=abc.ABCMeta):
+    filters: List[LDAPFilter]
+
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_Filter(fallback=berdecoder)
-        )
-        r = klass(l, tag=tag)
-        return r
+    def from_wire(cls, content: bytes) -> "LDAPFilterSet":
+        vals = cls.unwrap(content)
+        filters = []
+        for filter_tag, filter_content in vals:
+            if filter_tag not in FILTERS:
+                raise UnknownBERTag(filter_tag)
+            filters.append(FILTERS[filter_tag].from_wire(filter_content))
+        return cls(filters)
+
+    def __init__(self, filters: List[LDAPFilter]):
+        self.filters = filters
 
     def __eq__(self, rhs):
-        # Fast paths
+        if not isinstance(rhs, LDAPFilterSet):
+            return False
+
         if self is rhs:
             return True
         elif len(self) != len(rhs):
             return False
 
-        return sorted(self, key=lambda x: x.toWire()) == sorted(
-            rhs, key=lambda x: x.toWire()
+        return sorted(self.filters, key=lambda x: x.to_wire()) == sorted(
+            rhs.filters, key=lambda x: x.to_wire()
         )
+
+    def to_wire(self) -> bytes:
+        return self.wrap(self.filters)
 
 
 class LDAPFilter_and(LDAPFilterSet):
-    tag = CLASS_CONTEXT | 0x00
+    _tag = 0x00
 
-    def asText(self):
-        return "(&" + "".join([x.asText() for x in self]) + ")"
+    @property
+    def as_text(self) -> str:
+        return "(&" + "".join([x.as_text for x in self.filters]) + ")"
 
 
 class LDAPFilter_or(LDAPFilterSet):
-    tag = CLASS_CONTEXT | 0x01
+    _tag = 0x01
 
-    def asText(self):
-        return "(|" + "".join([x.asText() for x in self]) + ")"
+    @property
+    def as_text(self) -> str:
+        return "(|" + "".join([x.as_text for x in self.filters]) + ")"
 
 
 class LDAPFilter_not(LDAPFilter):
-    tag = CLASS_CONTEXT | 0x02
+    _tag = 0x02
+    value: LDAPFilter
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        value, bytes = berDecodeObject(
-            LDAPBERDecoderContext_Filter(fallback=berdecoder, inherit=berdecoder),
-            content,
-        )
-        assert bytes == len(content)
+    def from_wire(cls, content: bytes) -> "LDAPFilter_not":
+        [val], bytes_used = berUnwrap(content)
+        check(bytes_used == len(content))
 
-        r = klass(value=value, tag=tag)
-        return r
+        filter_tag, filter_content = val
+        if filter_tag not in FILTERS:
+            raise UnknownBERTag(filter_tag)
+        value = FILTERS[filter_tag].from_wire(filter_content)
+        return cls(value)
 
-    def __init__(self, value, tag=tag):
-        LDAPFilter.__init__(self, tag=tag)
-        assert value is not None
+    def __init__(self, value: LDAPFilter):
         self.value = value
 
     def __repr__(self):
@@ -743,81 +781,109 @@ class LDAPFilter_not(LDAPFilter):
                 self.tag,
             )
 
-    def toWire(self):
-        value = to_bytes(self.value)
-        return bytes((self.identification(),)) + int2berlen(len(value)) + value
+    def to_wire(self) -> bytes:
+        value_bytes = self.value.to_wire()
+        return bytes((self.tag,)) + int2berlen(len(value_bytes)) + value_bytes
 
-    def asText(self):
-        return "(!" + self.value.asText() + ")"
+    @property
+    def as_text(self) -> str:
+        return "(!" + self.value.as_text + ")"
 
 
-class LDAPFilter_equalityMatch(LDAPAttributeValueAssertion):
-    tag = CLASS_CONTEXT | 0x03
+class LDAPFilter_equalityMatch(LDAPAttributeValueAssertion, LDAPFilter):
+    _tag = 0x03
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc.value
+            + self.attributeDesc
             + "="
-            + self.escaper(self.assertionValue.value)
+            + escape(self.assertionValue)
             + ")"
         )
 
 
-class LDAPFilter_substrings_initial(LDAPString):
-    tag = CLASS_CONTEXT | 0x00
+class LDAPFilter_substrings_string(LDAPAssertionValue):
+    _tag_class = TagClasses.CONTEXT
 
-    def asText(self):
-        return self.escaper(self.value)
-
-
-class LDAPFilter_substrings_any(LDAPString):
-    tag = CLASS_CONTEXT | 0x01
-
-    def asText(self):
-        return self.escaper(self.value)
+    @property
+    def as_text(self) -> str:
+        return escape(self.value)
 
 
-class LDAPFilter_substrings_final(LDAPString):
-    tag = CLASS_CONTEXT | 0x02
-
-    def asText(self):
-        return self.escaper(self.value)
+class LDAPFilter_substrings_initial(LDAPFilter_substrings_string):
+    _tag = 0x00
 
 
-class LDAPBERDecoderContext_Filter_substrings(BERDecoderContext):
-    Identities = {
-        LDAPFilter_substrings_initial.tag: LDAPFilter_substrings_initial,
-        LDAPFilter_substrings_any.tag: LDAPFilter_substrings_any,
-        LDAPFilter_substrings_final.tag: LDAPFilter_substrings_final,
-    }
+class LDAPFilter_substrings_any(LDAPFilter_substrings_string):
+    _tag = 0x01
 
 
-class LDAPFilter_substrings(BERSequence):
-    tag = CLASS_CONTEXT | 0x04
+class LDAPFilter_substrings_final(LDAPFilter_substrings_string):
+    _tag = 0x02
+
+
+class LDAP_substrings(BERSequence):
+    value: List[LDAPFilter_substrings_string]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_Filter_substrings(fallback=berdecoder)
-        )
-        assert len(l) == 2
-        assert len(l[1]) >= 1
+    def from_wire(cls, content: bytes) -> "BERBase":
+        vals = cls.unwrap(content)
+        check(len(vals) != 0)
 
-        r = klass(type=l[0].value, substrings=list(l[1]), tag=tag)
-        return r
+        substrings = []
+        for substring_tag, substring_content in vals:
+            if substring_tag == LDAPFilter_substrings_initial.tag:
+                substring = LDAPFilter_substrings_initial.from_wire(substring_content)
+            elif substring_tag == LDAPFilter_substrings_any.tag:
+                substring = LDAPFilter_substrings_any.from_wire(substring_content)
+            elif substring_tag == LDAPFilter_substrings_final.tag:
+                substring = LDAPFilter_substrings_final.from_wire(substring_content)
+            else:
+                raise UnknownBERTag(substring_tag)
+            substrings.append(substring)
+        return cls(value=substrings)
 
-    def __init__(self, type=None, substrings=None, tag=None):
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert type is not None
-        assert substrings is not None
-        self.type = type
-        self.substrings = substrings
+    def __init__(self, value: List[LDAPFilter_substrings_string]):
+        if sum(1 for substring in value if type(substring) is LDAPFilter_substrings_initial) > 1:
+            raise ValueError
+        if sum(1 for substring in value if type(substring) is LDAPFilter_substrings_final) > 1:
+            raise ValueError
+        self.value = value
 
-    def toWire(self):
-        return BERSequence(
-            [LDAPString(self.type), BERSequence(self.substrings)], tag=self.tag
-        ).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap(self.value)
+
+
+# SubstringFilter ::= SEQUENCE {
+#      type           AttributeDescription,
+#      substrings     SEQUENCE SIZE (1..MAX) OF substring CHOICE {
+#           initial [0] AssertionValue,  -- can occur at most once
+#           any     [1] AssertionValue,
+#           final   [2] AssertionValue } -- can occur at most once
+#      }
+class LDAPFilter_substrings(BERSequence, LDAPFilter):
+    _tag = 0x04
+    type: str
+    substrings: List[LDAPFilter_substrings_string]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPFilter_substrings":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+
+        type_ = decode(vals[0], LDAPAttributeDescription).value
+        substrings = decode(vals[0], LDAP_substrings).value
+        return cls(type_=type_, substrings=substrings)
+
+    def __init__(self, type_: str, substrings: List[LDAPFilter_substrings_string]):
+        self.type = type_
+        # do validation
+        self.substrings = LDAP_substrings(substrings).value
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPAttributeDescription(self.type), LDAP_substrings(self.substrings)])
 
     def __repr__(self):
         tp = self.type
@@ -833,7 +899,8 @@ class LDAPFilter_substrings(BERSequence):
                 self.tag,
             )
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         initial = None
         final = None
         any = []
@@ -844,13 +911,13 @@ class LDAPFilter_substrings(BERSequence):
                 assert initial is None
                 assert not any
                 assert final is None
-                initial = s.asText()
+                initial = s.as_text
             elif isinstance(s, LDAPFilter_substrings_final):
                 assert final is None
-                final = s.asText()
+                final = s.as_text
             elif isinstance(s, LDAPFilter_substrings_any):
                 assert final is None
-                any.append(s.asText())
+                any.append(s.as_text)
             else:
                 raise NotImplementedError("TODO: Filter type not supported %r" % s)
 
@@ -862,168 +929,147 @@ class LDAPFilter_substrings(BERSequence):
         return "(" + self.type + "=" + "*".join([initial] + any + [final]) + ")"
 
 
-class LDAPFilter_greaterOrEqual(LDAPAttributeValueAssertion):
-    tag = CLASS_CONTEXT | 0x05
+class LDAPFilter_greaterOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
+    _tag = 0x05
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc.value
+            + self.attributeDesc
             + ">="
-            + self.escaper(self.assertionValue.value)
+            + escape(self.assertionValue)
             + ")"
         )
 
 
-class LDAPFilter_lessOrEqual(LDAPAttributeValueAssertion):
-    tag = CLASS_CONTEXT | 0x06
+class LDAPFilter_lessOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
+    _tag = 0x06
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc.value
+            + self.attributeDesc
             + "<="
-            + self.escaper(self.assertionValue.value)
+            + escape(self.assertionValue)
             + ")"
         )
 
 
-class LDAPFilter_present(LDAPAttributeDescription):
-    tag = CLASS_CONTEXT | 0x07
+class LDAPFilter_present(LDAPAttributeDescription, LDAPFilter):
+    _tag = 0x07
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return "(%s=*)" % self.value
 
 
-class LDAPFilter_approxMatch(LDAPAttributeValueAssertion):
-    tag = CLASS_CONTEXT | 0x08
+class LDAPFilter_approxMatch(LDAPAttributeValueAssertion, LDAPFilter):
+    _tag = 0x08
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc.value
+            + self.attributeDesc
             + "~="
-            + self.escaper(self.assertionValue.value)
+            + escape(self.assertionValue)
             + ")"
         )
 
 
+# MatchingRuleId ::= LDAPString
 class LDAPMatchingRuleId(LDAPString):
     pass
 
 
-class LDAPAssertionValue(BEROctetString):
-    pass
-
-
 class LDAPMatchingRuleAssertion_matchingRule(LDAPMatchingRuleId):
-    tag = CLASS_CONTEXT | 0x01
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x01
 
 
 class LDAPMatchingRuleAssertion_type(LDAPAttributeDescription):
-    tag = CLASS_CONTEXT | 0x02
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x02
 
 
 class LDAPMatchingRuleAssertion_matchValue(LDAPAssertionValue):
-    tag = CLASS_CONTEXT | 0x03
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x03
 
 
 class LDAPMatchingRuleAssertion_dnAttributes(BERBoolean):
-    tag = CLASS_CONTEXT | 0x04
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x04
 
 
-class LDAPBERDecoderContext_MatchingRuleAssertion(BERDecoderContext):
-    Identities = {
-        LDAPMatchingRuleAssertion_matchingRule.tag: LDAPMatchingRuleAssertion_matchingRule,
-        LDAPMatchingRuleAssertion_type.tag: LDAPMatchingRuleAssertion_type,
-        LDAPMatchingRuleAssertion_matchValue.tag: LDAPMatchingRuleAssertion_matchValue,
-        LDAPMatchingRuleAssertion_dnAttributes.tag: LDAPMatchingRuleAssertion_dnAttributes,
-    }
-
-
+# MatchingRuleAssertion ::= SEQUENCE {
+#      matchingRule    [1] MatchingRuleId OPTIONAL,
+#      type            [2] AttributeDescription OPTIONAL,
+#      matchValue      [3] AssertionValue,
+#      dnAttributes    [4] BOOLEAN DEFAULT FALSE }
 class LDAPMatchingRuleAssertion(BERSequence):
-    matchingRule = None
-    type = None
-    matchValue = None
-    dnAttributes = None
+    matchingRule: Optional[str]
+    type: Optional[str]
+    matchValue: bytes
+    dnAttributes: Optional[bool]  # None signals default value of False
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
+    def from_wire(cls, content: bytes) -> "LDAPMatchingRuleAssertion":
+        vals = cls.unwrap(content)
+        check(1 <= len(vals) <= 4)
+
         matchingRule = None
-        atype = None
+        type_ = None
         matchValue = None
         dnAttributes = None
-        l = berDecodeMultiple(
-            content,
-            LDAPBERDecoderContext_MatchingRuleAssertion(
-                fallback=berdecoder, inherit=berdecoder
-            ),
-        )
-        assert 1 <= len(l) <= 4
-        if isinstance(l[0], LDAPMatchingRuleAssertion_matchingRule):
-            matchingRule = l[0]
-            del l[0]
-        if len(l) >= 1 and isinstance(l[0], LDAPMatchingRuleAssertion_type):
-            atype = l[0]
-            del l[0]
-        if len(l) >= 1 and isinstance(l[0], LDAPMatchingRuleAssertion_matchValue):
-            matchValue = l[0]
-            del l[0]
-        if len(l) >= 1 and isinstance(l[0], LDAPMatchingRuleAssertion_dnAttributes):
-            dnAttributes = l[0]
-            del l[0]
-        assert matchValue
-        if not dnAttributes:
-            dnAttributes = None
-        r = klass(
-            matchingRule=matchingRule,
-            type=atype,
-            matchValue=matchValue,
-            dnAttributes=dnAttributes,
-            tag=tag,
-        )
 
-        return r
+        for unknown_tag, unknown_content in vals:
+            if unknown_tag == LDAPMatchingRuleAssertion_matchingRule.tag:
+                if matchingRule is not None:
+                    raise ValueError
+                matchingRule = LDAPMatchingRuleAssertion_matchingRule.from_wire(unknown_content).value
+            elif unknown_tag == LDAPMatchingRuleAssertion_type.tag:
+                if type_ is not None:
+                    raise ValueError
+                type_ = LDAPMatchingRuleAssertion_type.from_wire(unknown_content).value
+            elif unknown_tag == LDAPMatchingRuleAssertion_matchValue.tag:
+                if matchValue is not None:
+                    raise ValueError
+                matchValue = LDAPMatchingRuleAssertion_matchValue.from_wire(unknown_content).value
+            elif unknown_tag == LDAPMatchingRuleAssertion_dnAttributes.tag:
+                if dnAttributes is not None:
+                    raise ValueError
+                dnAttributes = LDAPMatchingRuleAssertion_dnAttributes.from_wire(unknown_content).value
+            else:
+                raise UnknownBERTag(unknown_tag)
+
+        check(matchValue is not None)
+        return cls(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
 
     def __init__(
         self,
-        matchingRule=None,
-        type=None,
-        matchValue=None,
-        dnAttributes=None,
-        tag=None,
-        escaper=escape,
+        matchingRule: Optional[str],
+        type_: Optional[str],
+        matchValue: bytes,
+        dnAttributes: Optional[bool],
     ):
-        BERSequence.__init__(self, value=[], tag=tag)
-        assert matchValue is not None
-        if isinstance(matchingRule, (bytes, str)):
-            matchingRule = LDAPMatchingRuleAssertion_matchingRule(matchingRule)
-
-        if isinstance(type, (bytes, str)):
-            type = LDAPMatchingRuleAssertion_type(type)
-
-        if isinstance(matchValue, (bytes, str)):
-            matchValue = LDAPMatchingRuleAssertion_matchValue(matchValue)
-
-        if isinstance(dnAttributes, bool):
-            dnAttributes = LDAPMatchingRuleAssertion_dnAttributes(dnAttributes)
-
         self.matchingRule = matchingRule
-        self.type = type
+        self.type = type_
         self.matchValue = matchValue
         self.dnAttributes = dnAttributes
-        if not self.dnAttributes:
-            self.dnAttributes = None
-        self.escaper = escaper
 
-    def toWire(self):
-        return BERSequence(
-            filter(
-                lambda x: x is not None,
-                [self.matchingRule, self.type, self.matchValue, self.dnAttributes],
-            ),
-            tag=self.tag,
-        ).toWire()
+    def to_wire(self) -> bytes:
+        to_send = []
+        if self.matchingRule is not None:
+            to_send.append(LDAPMatchingRuleAssertion_matchingRule(self.matchingRule))
+        if self.type is not None:
+            to_send.append(LDAPMatchingRuleAssertion_type(self.type))
+        to_send.append(self.matchValue)
+        if self.dnAttributes is not None:
+            to_send.append(LDAPMatchingRuleAssertion_dnAttributes(self.dnAttributes))
+        return self.wrap(to_send)
 
     def __repr__(self):
         l = []
@@ -1036,17 +1082,18 @@ class LDAPMatchingRuleAssertion(BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-class LDAPFilter_extensibleMatch(LDAPMatchingRuleAssertion):
-    tag = CLASS_CONTEXT | 0x09
+class LDAPFilter_extensibleMatch(LDAPMatchingRuleAssertion, LDAPFilter):
+    _tag = 0x09
 
-    def asText(self):
+    @property
+    def as_text(self) -> str:
         return (
             "("
-            + (self.type.value if self.type else "")
-            + (":dn" if self.dnAttributes and self.dnAttributes.value else "")
-            + ((":" + self.matchingRule.value) if self.matchingRule else "")
+            + (self.type if self.type else "")
+            + (":dn" if self.dnAttributes and self.dnAttributes else "")
+            + ((":" + self.matchingRule) if self.matchingRule else "")
             + ":="
-            + self.escaper(self.matchValue.value)
+            + escape(self.matchValue)
             + ")"
         )
 
@@ -1993,6 +2040,17 @@ class LDAPBERDecoderContext(BERDecoderContext):
         LDAPCompareResponse.tag: LDAPCompareResponse,
     }
 
+
+FILTERS: Mapping[int, Type[LDAPFilter]] = {
+    LDAPFilter_not.tag: LDAPFilter_not,
+    LDAPFilter_equalityMatch.tag: LDAPFilter_equalityMatch,
+    LDAPFilter_substrings.tag: LDAPFilter_substrings,
+    LDAPFilter_greaterOrEqual.tag: LDAPFilter_greaterOrEqual,
+    LDAPFilter_lessOrEqual.tag: LDAPFilter_lessOrEqual,
+    LDAPFilter_present.tag: LDAPFilter_present,
+    LDAPFilter_approxMatch.tag: LDAPFilter_approxMatch,
+    LDAPFilter_extensibleMatch.tag: LDAPFilter_extensibleMatch,
+}
 
 PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
     LDAPBindResponse.tag: LDAPBindResponse,
