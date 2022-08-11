@@ -109,6 +109,7 @@ class LDAPRelativeDN(LDAPString):
     pass
 
 
+# AttributeValue ::= OCTET STRING
 class LDAPAttributeValue(BEROctetString):
     pass
 
@@ -1723,34 +1724,30 @@ class LDAPBERDecoderContext_Compare(BERDecoderContext):
     Identities = {BERSequence.tag: LDAPAttributeValueAssertion}
 
 
+# CompareRequest ::= [APPLICATION 14] SEQUENCE {
+#      entry           LDAPDN,
+#      ava             AttributeValueAssertion }
 class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 14
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0E
 
-    entry = None
-    ava = None
+    entry: str
+    ava: LDAPAttributeValueAssertion
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content,
-            LDAPBERDecoderContext_Compare(fallback=berdecoder, inherit=berdecoder),
-        )
+    def from_wire(cls, content: bytes) -> "LDAPCompareRequest":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        entry = decode(vals[0], LDAPDN).value
+        ava = decode(vals[1], LDAPAttributeValueAssertion)
+        return cls(entry=entry, ava=ava)
 
-        r = klass(entry=l[0].value, ava=l[1], tag=tag)
-
-        return r
-
-    def __init__(self, entry, ava, tag=None):
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
-        assert entry is not None
-        assert ava is not None
+    def __init__(self, entry: str, ava: LDAPAttributeValueAssertion):
         self.entry = entry
         self.ava = ava
 
-    def toWire(self):
-        l = [LDAPString(self.entry), self.ava]
-        return BERSequence(l, tag=self.tag).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPDN(self.entry), self.ava])
 
     def __repr__(self):
         l = [
@@ -1760,8 +1757,10 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
         return "{}({})".format(self.__class__.__name__, ", ".join(l))
 
 
+# CompareResponse ::= [APPLICATION 15] LDAPResult
 class LDAPCompareResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 15
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0F
 
 
 class LDAPAbandonRequest(LDAPProtocolRequest, LDAPInteger):
