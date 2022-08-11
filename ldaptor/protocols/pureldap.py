@@ -3,29 +3,22 @@
 import abc
 import enum
 import string
-from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar, Sequence
+from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar
 
 from ldaptor.protocols.pureber import (
     BERBoolean,
-    BERDecoderContext,
     BEREnumerated,
     BERInteger,
     BERNull,
     BEROctetString,
     BERSequence,
     BERSet,
-    CLASS_APPLICATION,
-    CLASS_CONTEXT,
-    berDecodeMultiple,
-    berDecodeObject,
     int2berlen,
     UnknownBERTag,
     BERBase,
-    STRUCTURED,
     TagClasses,
     berUnwrap,
 )
-from ldaptor._encoder import to_bytes
 
 next_ldap_message_id = 1
 
@@ -208,13 +201,6 @@ class LDAPProtocolRequest(LDAPProtocolOp, metaclass=abc.ABCMeta):
 
 class LDAPProtocolResponse(LDAPProtocolOp, metaclass=abc.ABCMeta):
     pass
-
-
-class LDAPBERDecoderContext_LDAPBindRequest(BERDecoderContext):
-    Identities = {
-        CLASS_CONTEXT | 0x00: BEROctetString,
-        CLASS_CONTEXT | 0x03: BERSequence,
-    }
 
 
 # AuthenticationChoice ::= CHOICE {
@@ -1083,21 +1069,6 @@ class LDAPFilter_extensibleMatch(LDAPMatchingRuleAssertion, LDAPFilter):
         )
 
 
-class LDAPBERDecoderContext_Filter(BERDecoderContext):
-    Identities = {
-        LDAPFilter_and.tag: LDAPFilter_and,
-        LDAPFilter_or.tag: LDAPFilter_or,
-        LDAPFilter_not.tag: LDAPFilter_not,
-        LDAPFilter_equalityMatch.tag: LDAPFilter_equalityMatch,
-        LDAPFilter_substrings.tag: LDAPFilter_substrings,
-        LDAPFilter_greaterOrEqual.tag: LDAPFilter_greaterOrEqual,
-        LDAPFilter_lessOrEqual.tag: LDAPFilter_lessOrEqual,
-        LDAPFilter_present.tag: LDAPFilter_present,
-        LDAPFilter_approxMatch.tag: LDAPFilter_approxMatch,
-        LDAPFilter_extensibleMatch.tag: LDAPFilter_extensibleMatch,
-    }
-
-
 class SearchScopes(enum.IntEnum):
     baseObject = 0
     singleLevel = 1
@@ -1110,11 +1081,6 @@ class LDAPSearchScope(BEREnumerated):
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
         return SearchScopes
-
-
-LDAP_SCOPE_baseObject = 0
-LDAP_SCOPE_singleLevel = 1
-LDAP_SCOPE_wholeSubtree = 2
 
 
 class DerefAliases(enum.IntEnum):
@@ -1130,14 +1096,6 @@ class LDAPDerefAlias(BEREnumerated):
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
         return DerefAliases
-
-
-LDAP_DEREF_neverDerefAliases = 0
-LDAP_DEREF_derefInSearching = 1
-LDAP_DEREF_derefFindingBaseObj = 2
-LDAP_DEREF_derefAlways = 3
-
-LDAPFilterMatchAll = LDAPFilter_present("objectClass")
 
 
 # AttributeSelection ::= SEQUENCE OF selector LDAPString
@@ -1461,12 +1419,6 @@ class LDAPControl(BERSequence):
         return self.wrap(vals)
 
 
-class LDAPBERDecoderContext_TopLevel(BERDecoderContext):
-    Identities = {
-        BERSequence.tag: LDAPMessage,
-    }
-
-
 class ModifyOperations(enum.IntEnum):
     add = 0
     delete = 1
@@ -1723,10 +1675,6 @@ class LDAPModifyDNResponse(LDAPResult):
     _tag = 0x0D
 
 
-class LDAPBERDecoderContext_Compare(BERDecoderContext):
-    Identities = {BERSequence.tag: LDAPAttributeValueAssertion}
-
-
 # CompareRequest ::= [APPLICATION 14] SEQUENCE {
 #      entry           LDAPDN,
 #      ava             AttributeValueAssertion }
@@ -1788,21 +1736,6 @@ class LDAPOID(BEROctetString):
     pass
 
 
-class LDAPResponseName(LDAPOID):
-    tag = CLASS_CONTEXT | 10
-
-
-class LDAPResponse(BEROctetString):
-    tag = CLASS_CONTEXT | 11
-
-
-class LDAPBERDecoderContext_LDAPExtendedRequest(BERDecoderContext):
-    Identities = {
-        CLASS_CONTEXT | 0x00: BEROctetString,
-        CLASS_CONTEXT | 0x01: BEROctetString,
-    }
-
-
 class LDAPExtendedRequest_requestName(LDAPOID):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x00
@@ -1839,13 +1772,6 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPExtendedRequest_requestName(self.requestName),
                           LDAPExtendedRequest_requestValue(self.requestValue)])
-
-
-class LDAPBERDecoderContext_LDAPExtendedResponse(BERDecoderContext):
-    Identities = {
-        LDAPResponseName.tag: LDAPResponseName,
-        LDAPResponse.tag: LDAPResponse,
-    }
 
 
 class LDAPExtendedResponse_requestName(LDAPOID):
@@ -1934,32 +1860,6 @@ class LDAPExtendedResponse(LDAPResult):
         if self.responseValue is not None:
             ret.append(LDAPExtendedResponse_requestValue(self.responseValue))
         return self.wrap(ret)
-
-
-class LDAPBERDecoderContext(BERDecoderContext):
-    Identities = {
-        LDAPBindResponse.tag: LDAPBindResponse,
-        LDAPBindRequest.tag: LDAPBindRequest,
-        LDAPUnbindRequest.tag: LDAPUnbindRequest,
-        LDAPSearchRequest.tag: LDAPSearchRequest,
-        LDAPSearchResultEntry.tag: LDAPSearchResultEntry,
-        LDAPSearchResultDone.tag: LDAPSearchResultDone,
-        LDAPSearchResultReference.tag: LDAPSearchResultReference,
-        LDAPReferral.tag: LDAPReferral,
-        LDAPModifyRequest.tag: LDAPModifyRequest,
-        LDAPModifyResponse.tag: LDAPModifyResponse,
-        LDAPAddRequest.tag: LDAPAddRequest,
-        LDAPAddResponse.tag: LDAPAddResponse,
-        LDAPDelRequest.tag: LDAPDelRequest,
-        LDAPDelResponse.tag: LDAPDelResponse,
-        LDAPExtendedRequest.tag: LDAPExtendedRequest,
-        LDAPExtendedResponse.tag: LDAPExtendedResponse,
-        LDAPModifyDNRequest.tag: LDAPModifyDNRequest,
-        LDAPModifyDNResponse.tag: LDAPModifyDNResponse,
-        LDAPAbandonRequest.tag: LDAPAbandonRequest,
-        LDAPCompareRequest.tag: LDAPCompareRequest,
-        LDAPCompareResponse.tag: LDAPCompareResponse,
-    }
 
 
 FILTERS: Mapping[int, Type[LDAPFilter]] = {

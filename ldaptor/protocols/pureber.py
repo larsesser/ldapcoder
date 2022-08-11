@@ -16,7 +16,7 @@
 #     this protocol definition.
 import abc
 import enum
-from typing import Tuple, List, Optional, Type, Sequence
+from typing import Tuple, List, Type, Sequence
 
 # xxxxxxxx
 # |/|\.../
@@ -26,19 +26,6 @@ from typing import Tuple, List, Optional, Type, Sequence
 # | primitive (0) or structured (1)
 # |
 # class
-
-CLASS_MASK = 0xC0
-CLASS_UNIVERSAL = 0x00
-CLASS_APPLICATION = 0x40
-CLASS_CONTEXT = 0x80
-CLASS_PRIVATE = 0xC0
-
-STRUCTURED_MASK = 0x20
-STRUCTURED = 0x20
-NOT_STRUCTURED = 0x00
-
-TAG_MASK = 0x1F
-
 
 # LENGTH
 # 0xxxxxxx = 0..127
@@ -167,10 +154,6 @@ class BERBase(metaclass=abc.ABCMeta):
     def to_wire(self) -> bytes:
         """Encode the instance of this class to its binary value."""
         raise NotImplementedError
-
-
-class BERException(Exception):
-    pass
 
 
 class BERExceptionInsufficientData(Exception):
@@ -354,50 +337,6 @@ class BERSet(BERSequence, metaclass=abc.ABCMeta):
     _tag = 0x11
 
 
-class BERDecoderContext:
-    Identities = {
-        BERBoolean.tag: BERBoolean,
-        BERInteger.tag: BERInteger,
-        BEROctetString.tag: BEROctetString,
-        BERNull.tag: BERNull,
-        BEREnumerated.tag: BEREnumerated,
-        BERSequence.tag: BERSequence,
-        BERSet.tag: BERSet,
-    }
-
-    def __init__(self, fallback=None, inherit=None):
-        self.fallback = fallback
-        self.inherit_context = inherit
-
-    def lookup_id(self, id):
-        try:
-            return self.Identities[id]
-        except KeyError:
-            if self.fallback:
-                return self.fallback.lookup_id(id)
-            else:
-                return None
-
-    def inherit(self):
-        return self.inherit_context or self
-
-    def __repr__(self):
-        identities = []
-        for tag, class_ in self.Identities.items():
-            identities.append(f"0x{tag:02x}: {class_.__name__}")
-
-        return (
-            "<"
-            + self.__class__.__name__
-            + " identities={%s}" % ", ".join(identities)
-            + " fallback="
-            + repr(self.fallback)
-            + " inherit="
-            + repr(self.inherit_context)
-            + ">"
-        )
-
-
 def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
     """Takes a raw ber byte string and returns all of its elements tags and contents.
 
@@ -422,50 +361,6 @@ def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
         ret.append((tag, content))
         bytes_used += 1 + lenlen + length
     return (ret, bytes_used)
-
-
-
-def berDecodeObject(context: BERDecoderContext, m: bytes) -> Tuple[Optional[BERBase], int]:
-    """berDecodeObject(context, bytes) -> (berobject, bytesUsed)
-    berobject may be None.
-    """
-    while m:
-        need(m, 2)
-        i = ber2int(m[0:1], signed=False)
-
-        length, lenlen = berDecodeLength(m, offset=1)
-        need(m, 1 + lenlen + length)
-        m2 = m[1 + lenlen : 1 + lenlen + length]
-
-        berclass = context.lookup_id(i)
-        if berclass:
-            inh = context.inherit()
-            assert inh
-            r = berclass.fromBER(content=m2, context=inh)
-            return (r, 1 + lenlen + length)
-        else:
-            print(str(UnknownBERTag(i, context)))  # TODO
-            return (None, 1 + lenlen + length)
-    return (None, 0)
-
-
-def berDecodeMultiple(content: bytes, context: BERDecoderContext) -> List[BERBase]:
-    """berDecodeMultiple(content, berdecoder) -> [objects]
-
-    Decodes everything in content and returns a list of decoded
-    objects.
-
-    All of content will be decoded, and content must contain complete
-    BER objects.
-    """
-    l = []
-    while content:
-        n, bytes = berDecodeObject(context, content)
-        if n is not None:
-            l.append(n)
-        assert bytes <= len(content)
-        content = content[bytes:]
-    return l
 
 
 # TODO unimplemented classes are below:
