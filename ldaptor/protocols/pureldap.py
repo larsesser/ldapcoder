@@ -1451,149 +1451,161 @@ class LDAPControl(BERSequence):
         return self.wrap(vals)
 
 
-class LDAPBERDecoderContext_LDAPControls(BERDecoderContext):
-    Identities = {
-        LDAPControl.tag: LDAPControl,
-    }
-
-
-class LDAPBERDecoderContext_LDAPMessage(BERDecoderContext):
-    Identities = {
-        LDAPControls.tag: LDAPControls,
-        LDAPSearchResultReference.tag: LDAPSearchResultReference,
-    }
-
-
 class LDAPBERDecoderContext_TopLevel(BERDecoderContext):
     Identities = {
         BERSequence.tag: LDAPMessage,
     }
 
 
-class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 0x06
-    object = None
-    modification = None
+class ModifyOperations(enum.IntEnum):
+    add = 0
+    delete = 1
+    replace = 2
+    # ...
+
+
+class LDAPModify_operation(BEREnumerated):
+    value: ModifyOperations
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
+    def enum_cls(cls) -> Type[enum.IntEnum]:
+        return ModifyOperations
 
-        assert len(l) == 2
 
-        r = klass(object=l[0].value, modification=l[1].data, tag=tag)
-        return r
+class LDAPModify_change(BERSequence):
+    operation: ModifyOperations
+    modification: LDAPPartialAttribute
 
-    def __init__(self, object=None, modification=None, tag=None):
-        """
-        Initialize the object
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPModify_change":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        operation = decode(vals[0], LDAPModify_operation).value
+        modification = decode(vals[1], LDAPPartialAttribute)
+        return cls(operation=operation, modification=modification)
 
-        Example usage::
-
-                l = LDAPModifyRequest(
-                    object='cn=foo,dc=example,dc=com',
-                    modification=[
-
-                      BERSequence([
-                        BEREnumerated(0),
-                        BERSequence([
-                          LDAPAttributeDescription('attr1'),
-                          BERSet([
-                            LDAPString('value1'),
-                            LDAPString('value2'),
-                            ]),
-                          ]),
-                        ]),
-
-                      BERSequence([
-                        BEREnumerated(1),
-                        BERSequence([
-                          LDAPAttributeDescription('attr2'),
-                          ]),
-                        ]),
-
-                    ])
-
-        But more likely you just want to say::
-
-                mod = delta.ModifyOp('cn=foo,dc=example,dc=com',
-                    [delta.Add('attr1', ['value1', 'value2']),
-                     delta.Delete('attr1', ['value1', 'value2'])])
-                l = mod.asLDAP()
-        """
-
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
-        self.object = object
+    def __init__(self, operation: ModifyOperations, modification: LDAPPartialAttribute):
+        self.operation = operation
         self.modification = modification
 
-    def toWire(self):
-        l = [LDAPString(self.object)]
-        if self.modification is not None:
-            l.append(BERSequence(self.modification))
-        return BERSequence(l, tag=self.tag).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPModify_operation(self.operation), self.modification])
+
+
+class LDAPModify_changes(BERSequence):
+    value: List[LDAPModify_change]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPModify_changes":
+        changes = [decode(val, LDAPModify_change) for val in cls.unwrap(content)]
+        return cls(changes)
+
+    def __init__(self, value: List[LDAPModify_change]):
+        self.value = value
+
+    def to_wire(self) -> bytes:
+        return self.wrap(self.value)
+
+
+# ModifyRequest ::= [APPLICATION 6] SEQUENCE {
+#      object          LDAPDN,
+#      changes         SEQUENCE OF change SEQUENCE {
+#           operation       ENUMERATED {
+#  add     (0),
+#  delete  (1),
+#  replace (2),
+#  ...  },
+#           modification    PartialAttribute } }
+class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x06
+    object: str
+    changes: List[LDAPModify_change]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPModifyRequest":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        object_ = decode(vals[0], LDAPDN).value
+        changes = decode(vals[1], LDAPModify_changes).value
+        return cls(object_=object_, changes=changes)
+
+    def __init__(self, object_: str, changes: List[LDAPModify_change]):
+        self.object = object_
+        self.changes = changes
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPDN(self.object), LDAPModify_changes(self.changes)])
 
     def __repr__(self):
         name = self.object
         if self.tag == self.__class__.tag:
             return self.__class__.__name__ + "(object={}, modification={})".format(
                 repr(name),
-                repr(self.modification),
+                repr(self.changes),
             )
         else:
             return self.__class__.__name__ + "(object=%s, modification=%s, tag=%d)" % (
                 repr(name),
-                repr(self.modification),
+                repr(self.changes),
                 self.tag,
             )
 
 
+# ModifyResponse ::= [APPLICATION 7] LDAPResult
 class LDAPModifyResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 0x07
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x07
 
 
-class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 0x08
+# Attribute ::= PartialAttribute(WITH COMPONENTS {
+#      ...,
+#      vals (SIZE(1..MAX))})
+class LDAPAttribute(LDAPPartialAttribute):
+    def __init__(self, type_: str, values: List[bytes]):
+        check(len(values) >= 1)
+        super().__init__(type_, values)
+
+
+# AttributeList ::= SEQUENCE OF attribute Attribute
+class LDAPAttributeList(BERSequence):
+    value: List[LDAPAttribute]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(content, berdecoder)
+    def from_wire(cls, content: bytes) -> "LDAPAttributeList":
+        value = [decode(val, LDAPAttribute) for val in cls.unwrap(content)]
+        return cls(value)
 
-        r = klass(entry=l[0].value, attributes=l[1], tag=tag)
-        return r
+    def __init__(self, value: List[LDAPAttribute]):
+        self.value = value
 
-    def __init__(self, entry=None, attributes=None, tag=None):
-        """
-        Initialize the object
+    def to_wire(self) -> bytes:
+        return self.wrap(self.value)
 
-        Example usage::
 
-                l=LDAPAddRequest(entry='cn=foo,dc=example,dc=com',
-                        attributes=[(LDAPAttributeDescription("attrFoo"),
-                             BERSet(value=(
-                                 LDAPAttributeValue("value1"),
-                                 LDAPAttributeValue("value2"),
-                             ))),
-                             (LDAPAttributeDescription("attrBar"),
-                             BERSet(value=(
-                                 LDAPAttributeValue("value1"),
-                                 LDAPAttributeValue("value2"),
-                             ))),
-                             ])"""
+# AddRequest ::= [APPLICATION 8] SEQUENCE {
+#      entry           LDAPDN,
+#      attributes      AttributeList }
+class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x08
+    entry: str
+    attributes: List[LDAPAttribute]
 
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPAddRequest":
+        vals = cls.unwrap(content)
+        check(len(vals) == 2)
+        entry = decode(vals[0], LDAPDN).value
+        attributes = decode(vals[1], LDAPAttributeList).value
+        return cls(entry=entry, attributes=attributes)
+
+    def __init__(self, entry: str, attributes: List[LDAPAttribute]):
         self.entry = entry
         self.attributes = attributes
 
-    def toWire(self):
-        return BERSequence(
-            [
-                LDAPString(self.entry),
-                BERSequence(map(BERSequence, self.attributes)),
-            ],
-            tag=self.tag,
-        ).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPDN(self.entry), LDAPAttributeList(self.attributes)])
 
     def __repr__(self):
         entry = self.entry
@@ -1610,26 +1622,16 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
             )
 
 
+# AddResponse ::= [APPLICATION 9] LDAPResult
 class LDAPAddResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 0x09
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x09
 
 
+# DelRequest ::= [APPLICATION 10] LDAPDN
 class LDAPDelRequest(LDAPProtocolRequest, LDAPString):
-    tag = CLASS_APPLICATION | 0x0A
-
-    def __init__(self, value=None, entry=None, tag=None):
-        """
-        Initialize the object
-
-        l=LDAPDelRequest(entry='cn=foo,dc=example,dc=com')
-        """
-        if entry is None and value is not None:
-            entry = value
-        LDAPProtocolRequest.__init__(self)
-        LDAPString.__init__(self, value=entry, tag=tag)
-
-    def toWire(self):
-        return LDAPString.toWire(self)
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0A
 
     def __repr__(self):
         entry = self.value
@@ -1642,8 +1644,10 @@ class LDAPDelRequest(LDAPProtocolRequest, LDAPString):
             )
 
 
+# DelResponse ::= [APPLICATION 11] LDAPResult
 class LDAPDelResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 0x0B
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0B
 
 
 class LDAPModifyDNResponse_newSuperior(LDAPString):
