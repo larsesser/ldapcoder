@@ -1782,6 +1782,8 @@ class LDAPAbandonRequest(LDAPProtocolRequest, LDAPMessageId):
             )
 
 
+# LDAPOID ::= OCTET STRING -- Constrained to <numericoid>
+#            -- [RFC4512]
 class LDAPOID(BEROctetString):
     pass
 
@@ -1801,42 +1803,42 @@ class LDAPBERDecoderContext_LDAPExtendedRequest(BERDecoderContext):
     }
 
 
-class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 23
+class LDAPExtendedRequest_requestName(LDAPOID):
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x00
 
-    requestName = None
-    requestValue = None
+
+class LDAPExtendedRequest_requestValue(BEROctetString):
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x01
+
+
+# ExtendedRequest ::= [APPLICATION 23] SEQUENCE {
+#      requestName      [0] LDAPOID,
+#      requestValue     [1] OCTET STRING OPTIONAL }
+class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x17
+    requestName: bytes
+    requestValue: Optional[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_LDAPExtendedRequest(fallback=berdecoder)
-        )
+    def from_wire(cls, content: bytes) -> "LDAPExtendedRequest":
+        vals = cls.unwrap(content)
+        check(1 <= len(vals) <= 2)
+        requestName = decode(vals[0], LDAPExtendedRequest_requestName).value
+        requestValue = None
+        if len(vals) == 2:
+            requestValue = decode(vals[1], LDAPExtendedRequest_requestValue).value
+        return cls(requestName=requestName, requestValue=requestValue)
 
-        kw = {}
-        try:
-            kw["requestValue"] = l[1].value
-        except IndexError:
-            pass
-
-        r = klass(requestName=l[0].value, tag=tag, **kw)
-        return r
-
-    def __init__(self, requestName=None, requestValue=None, tag=None):
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
-        assert requestName is not None
-        assert isinstance(requestName, (bytes, str))
-        assert requestValue is None or isinstance(requestValue, (bytes, str))
+    def __init__(self, requestName: bytes, requestValue: Optional[bytes]):
         self.requestName = requestName
         self.requestValue = requestValue
 
-    def toWire(self):
-        l = [LDAPOID(self.requestName, tag=CLASS_CONTEXT | 0)]
-        if self.requestValue is not None:
-            value = to_bytes(self.requestValue)
-            l.append(BEROctetString(value, tag=CLASS_CONTEXT | 1))
-        return BERSequence(l, tag=self.tag).toWire()
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPExtendedRequest_requestName(self.requestName),
+                          LDAPExtendedRequest_requestValue(self.requestValue)])
 
 
 class LDAPPasswordModifyRequest_userIdentity(BEROctetString):
@@ -1929,82 +1931,92 @@ class LDAPBERDecoderContext_LDAPExtendedResponse(BERDecoderContext):
     }
 
 
-class LDAPExtendedResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 0x18
+class LDAPExtendedResponse_requestName(LDAPOID):
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x0A
 
-    responseName = None
-    response = None
+
+class LDAPExtendedResponse_requestValue(BEROctetString):
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x0B
+
+
+# ExtendedResponse ::= [APPLICATION 24] SEQUENCE {
+#      COMPONENTS OF LDAPResult,
+#      responseName     [10] LDAPOID OPTIONAL,
+#      responseValue    [11] OCTET STRING OPTIONAL }
+class LDAPExtendedResponse(LDAPResult):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x18
+    responseName: Optional[bytes]
+    responseValue: Optional[bytes]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_LDAPExtendedResponse(fallback=berdecoder)
-        )
+    def from_wire(cls, content: bytes) -> "LDAPExtendedResponse":
+        vals = cls.unwrap(content)
+        check(3 <= len(vals) <= 6)
 
-        assert 3 <= len(l) <= 6
+        resultCode = decode(vals[0], LDAPResultCode).value
+        matchedDN = decode(vals[1], LDAPDN).value
+        diagnosticMessage = decode(vals[2], LDAPString).value
 
         referral = None
         responseName = None
-        response = None
-        for obj in l[3:]:
-            if isinstance(obj, LDAPResponseName):
-                responseName = obj.value
-            elif isinstance(obj, LDAPResponse):
-                response = obj.value
-            elif isinstance(obj, LDAPReferral):
-                # TODO support referrals
-                # self.referral=self.data[0]
-                pass
+        responseValue = None
+        for unknown_tag, unknown_content in vals[3:]:
+            if unknown_tag == LDAPReferral.tag:
+                if referral is not None:
+                    raise ValueError
+                raise NotImplementedError
+            elif unknown_tag == LDAPExtendedResponse_requestName.tag:
+                if responseName is not None:
+                    raise ValueError
+                responseName = LDAPExtendedResponse_requestName.from_wire(unknown_content).value
+            elif unknown_tag == LDAPExtendedResponse_requestValue.tag:
+                if responseValue is not None:
+                    raise ValueError
+                responseValue = LDAPExtendedResponse_requestValue.from_wire(unknown_content).value
             else:
-                assert False
+                raise UnknownBERTag(unknown_tag)
 
-        r = klass(
-            resultCode=l[0].value,
-            matchedDN=l[1].value,
-            errorMessage=l[2].value,
+        r = cls(
+            resultCode=resultCode,
+            matchedDN=matchedDN,
+            diagnosticMessage=diagnosticMessage,
             referral=referral,
             responseName=responseName,
-            response=response,
-            tag=tag,
+            responseValue=responseValue,
         )
         return r
 
     def __init__(
         self,
-        resultCode=None,
-        matchedDN=None,
-        errorMessage=None,
-        referral=None,
-        serverSaslCreds=None,
-        responseName=None,
-        response=None,
-        tag=None,
+        resultCode: ResultCodes,
+        matchedDN: str,
+        diagnosticMessage: str,
+        referral: Optional[LDAPReferral],
+        responseName: Optional[bytes],
+        responseValue: Optional[bytes],
     ):
-        LDAPResult.__init__(
-            self,
+        super().__init__(
             resultCode=resultCode,
             matchedDN=matchedDN,
-            errorMessage=errorMessage,
+            diagnosticMessage=diagnosticMessage,
             referral=referral,
-            serverSaslCreds=serverSaslCreds,
-            tag=tag,
         )
         self.responseName = responseName
-        self.response = response
+        self.responseValue = responseValue
 
-    def toWire(self):
-        assert self.referral is None  # TODO
-        l = [
-            BEREnumerated(self.resultCode),
-            BEROctetString(self.matchedDN),
-            BEROctetString(self.errorMessage),
-            # TODO referral [3] Referral OPTIONAL
-        ]
+    def to_wire(self) -> bytes:
+        ret: List[BERBase] = [LDAPResultCode(self.resultCode), LDAPDN(self.matchedDN),
+                              LDAPString(self.diagnosticMessage)]
+        if self.referral is not None:
+            ret.append(self.referral)
         if self.responseName is not None:
-            l.append(LDAPOID(self.responseName, tag=CLASS_CONTEXT | 0x0A))
-        if self.response is not None:
-            l.append(BEROctetString(self.response, tag=CLASS_CONTEXT | 0x0B))
-        return BERSequence(l, tag=self.tag).toWire()
+            ret.append(LDAPExtendedResponse_requestName(self.responseName))
+        if self.responseValue is not None:
+            ret.append(LDAPExtendedResponse_requestValue(self.responseValue))
+        return self.wrap(ret)
 
 
 class LDAPStartTLSRequest(LDAPExtendedRequest):
