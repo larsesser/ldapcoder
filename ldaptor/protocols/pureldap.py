@@ -114,6 +114,12 @@ class LDAPAttributeValue(BEROctetString):
     pass
 
 
+# MessageID ::= INTEGER (0 ..  maxInt)
+# maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
+class LDAPMessageId(BERInteger):
+    pass
+
+
 # LDAPMessage ::= SEQUENCE {
 #      messageID       MessageID,
 #      protocolOp      CHOICE {
@@ -140,9 +146,6 @@ class LDAPAttributeValue(BEROctetString):
 #           ...,
 #           intermediateResponse  IntermediateResponse },
 #      controls       [0] Controls OPTIONAL }
-#
-# MessageID ::= INTEGER (0 ..  maxInt)
-# maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
 class LDAPMessage(BERSequence):
     """
     To encode this object in order to be sent over the network use the to_wire()
@@ -157,7 +160,7 @@ class LDAPMessage(BERSequence):
         vals = cls.unwrap(content)
         check(len(vals) in {2, 3})
 
-        msg_id = decode(vals[0], BERInteger).value
+        msg_id = decode(vals[0], LDAPMessageId).value
 
         operation_tag, operation_content = vals[1]
         if operation_tag not in PROTOCOL_OPERATIONS:
@@ -180,7 +183,7 @@ class LDAPMessage(BERSequence):
         self.controls = controls
 
     def to_wire(self) -> bytes:
-        vals = [BERInteger(self.msg_id), self.operation]
+        vals = [LDAPMessageId(self.msg_id), self.operation]
         if self.controls is not None:
             vals.append(LDAPControls(self.controls))
         return self.wrap(vals)
@@ -1763,23 +1766,11 @@ class LDAPCompareResponse(LDAPResult):
     _tag = 0x0F
 
 
-class LDAPAbandonRequest(LDAPProtocolRequest, LDAPInteger):
-    tag = CLASS_APPLICATION | 0x10
+# AbandonRequest ::= [APPLICATION 16] MessageID
+class LDAPAbandonRequest(LDAPProtocolRequest, LDAPMessageId):
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x10
     needs_answer = 0
-
-    def __init__(self, value=None, id=None, tag=None):
-        """
-        Initialize the object
-
-        l=LDAPAbandonRequest(id=1)
-        """
-        if id is None and value is not None:
-            id = value
-        LDAPProtocolRequest.__init__(self)
-        LDAPInteger.__init__(self, value=id, tag=tag)
-
-    def toWire(self):
-        return LDAPInteger.toWire(self)
 
     def __repr__(self):
         if self.tag == self.__class__.tag:
