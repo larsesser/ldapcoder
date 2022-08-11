@@ -103,6 +103,12 @@ class LDAPDN(LDAPString):
     pass
 
 
+# RelativeLDAPDN ::= LDAPString
+#      -- Constrained to <name-component> [RFC4514]
+class LDAPRelativeDN(LDAPString):
+    pass
+
+
 class LDAPAttributeValue(BEROctetString):
     pass
 
@@ -1650,75 +1656,49 @@ class LDAPDelResponse(LDAPResult):
     _tag = 0x0B
 
 
-class LDAPModifyDNResponse_newSuperior(LDAPString):
-    tag = CLASS_CONTEXT | 0x00
+class LDAPModifyDNResponse_newSuperior(LDAPDN):
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x00
 
 
-class LDAPBERDecoderContext_ModifyDNRequest(BERDecoderContext):
-    Identities = {
-        LDAPModifyDNResponse_newSuperior.tag: LDAPModifyDNResponse_newSuperior,
-    }
-
-
+# ModifyDNRequest ::= [APPLICATION 12] SEQUENCE {
+#      entry           LDAPDN,
+#      newrdn          RelativeLDAPDN,
+#      deleteoldrdn    BOOLEAN,
+#      newSuperior     [0] LDAPDN OPTIONAL }
 class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
-    tag = CLASS_APPLICATION | 12
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0C
 
-    entry = None
-    newrdn = None
-    deleteoldrdn = None
-    newSuperior = None
+    entry: str
+    newrdn: str
+    deleteoldrdn: bool
+    newSuperior: Optional[str]
 
     @classmethod
-    def fromBER(klass, tag, content, berdecoder=None):
-        l = berDecodeMultiple(
-            content, LDAPBERDecoderContext_ModifyDNRequest(fallback=berdecoder)
-        )
+    def from_wire(cls, content: bytes) -> "LDAPModifyDNRequest":
+        vals = cls.unwrap(content)
+        check(3 <= len(vals) <= 4)
 
-        kw = {}
-        try:
-            kw["newSuperior"] = to_bytes(l[3].value)
-        except IndexError:
-            pass
+        entry = decode(vals[0], LDAPDN).value
+        newrdn = decode(vals[1], LDAPRelativeDN).value
+        deleteoldrdn = decode(vals[2], BERBoolean).value
+        newSuperior = None
+        if len(vals) == 4:
+            newSuperior = decode(vals[3], LDAPDN).value
+        return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 
-        r = klass(
-            entry=to_bytes(l[0].value),
-            newrdn=to_bytes(l[1].value),
-            deleteoldrdn=l[2].value,
-            tag=tag,
-            **kw,
-        )
-        return r
-
-    def __init__(self, entry, newrdn, deleteoldrdn, newSuperior=None, tag=None):
-        """
-        Initialize the object
-
-        Example usage::
-
-                l=LDAPModifyDNRequest(entry='cn=foo,dc=example,dc=com',
-                                      newrdn='someAttr=value',
-                                      deleteoldrdn=0)
-        """
-
-        LDAPProtocolRequest.__init__(self)
-        BERSequence.__init__(self, [], tag=tag)
-        assert entry is not None
-        assert newrdn is not None
-        assert deleteoldrdn is not None
+    def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: Optional[str]):
         self.entry = entry
         self.newrdn = newrdn
         self.deleteoldrdn = deleteoldrdn
         self.newSuperior = newSuperior
 
-    def toWire(self):
-        l = [
-            LDAPString(self.entry),
-            LDAPString(self.newrdn),
-            BERBoolean(self.deleteoldrdn),
-        ]
+    def to_wire(self) -> bytes:
+        ret: List[BERBase] = [LDAPDN(self.entry), LDAPRelativeDN(self.newrdn), BERBoolean(self.deleteoldrdn)]
         if self.newSuperior is not None:
-            l.append(LDAPString(self.newSuperior, tag=CLASS_CONTEXT | 0))
-        return BERSequence(l, tag=self.tag).toWire()
+            ret.append(LDAPDN(self.newSuperior))
+        return self.wrap(ret)
 
     def __repr__(self):
         l = [
@@ -1733,8 +1713,10 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
+# ModifyDNResponse ::= [APPLICATION 13] LDAPResult
 class LDAPModifyDNResponse(LDAPResult):
-    tag = CLASS_APPLICATION | 13
+    _tag_class = TagClasses.APPLICATION
+    _tag = 0x0D
 
 
 class LDAPBERDecoderContext_Compare(BERDecoderContext):
