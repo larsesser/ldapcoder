@@ -3,7 +3,7 @@
 import abc
 import enum
 import string
-from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar
+from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar, Sequence
 
 from ldaptor.protocols.pureber import (
     BERBoolean,
@@ -13,7 +13,6 @@ from ldaptor.protocols.pureber import (
     BERNull,
     BEROctetString,
     BERSequence,
-    BERSequenceOf,
     BERSet,
     CLASS_APPLICATION,
     CLASS_CONTEXT,
@@ -82,7 +81,7 @@ class LDAPInteger(BERInteger):
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,
 #               -- [ISO10646] characters
 class LDAPString(BEROctetString):
-    value: str
+    value: str  # type: ignore[assignment]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPString":
@@ -157,6 +156,7 @@ class LDAPMessage(BERSequence):
         if operation_tag not in PROTOCOL_OPERATIONS:
             raise UnknownBERTag(operation_tag)
         operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
+        assert isinstance(operation, LDAPProtocolOp)
 
         controls = None
         if len(vals) == 3:
@@ -245,7 +245,7 @@ class SaslAuthentication(BERSequence):
         self.credentials = credentials
 
     def to_wire(self) -> bytes:
-        ret = [LDAPString(self.mechanism)]
+        ret: List[BERBase] = [LDAPString(self.mechanism)]
         if self.credentials:
             ret.append(BEROctetString(self.credentials))
         return self.wrap(ret)
@@ -272,6 +272,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         dn = decode(vals[1], LDAPDN).value
 
         auth_tag, auth_content = vals[2]
+        auth: Union[bytes, Tuple[str, Optional[bytes]]]
         if auth_tag == SimpleAuthentication.tag:
             auth = SimpleAuthentication.from_wire(auth_content).value
             sasl = False
@@ -301,6 +302,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         self.sasl = sasl
 
     def to_wire(self) -> bytes:
+        auth: Union[SaslAuthentication, SimpleAuthentication]
         if self.sasl:
             assert isinstance(self.auth, tuple)
             # since the credentails for SASL is optional must check first
@@ -309,6 +311,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
             credentials = self.auth[1] if len(self.auth) > 1 else None
             auth = SaslAuthentication(mechanism=mechanism, credentials=credentials)
         else:
+            assert isinstance(self.auth, bytes)
             auth = SimpleAuthentication(self.auth)
         return self.wrap([BERInteger(self.version), LDAPDN(self.dn), auth])
 
@@ -333,7 +336,7 @@ class LDAPReferral(BERSequence):
 
 class LDAPException(Exception):
     resultCode: "ResultCodes"
-    message: bytes
+    message: Optional[bytes]
 
     def __init__(self, resultCode: "ResultCodes", message: bytes = None):
         self.resultCode = resultCode
@@ -561,7 +564,7 @@ class LDAPBindResponse(LDAPResult):
             elif unknown_tag == ServerSaslCreds.tag:
                 serverSaslCreds = decode(vals[3], ServerSaslCreds).value
             else:
-                raise UnknownBERTag
+                raise UnknownBERTag(unknown_tag)
         elif len(vals) == 5:
             referral = decode(vals[3], LDAPReferral)
             serverSaslCreds = decode(vals[4], ServerSaslCreds).value
@@ -681,7 +684,8 @@ class LDAPFilterSet(BERSet, LDAPFilter, metaclass=abc.ABCMeta):
             if filter_tag not in FILTERS:
                 raise UnknownBERTag(filter_tag)
             filters.append(FILTERS[filter_tag].from_wire(filter_content))
-        return cls(filters)
+        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
+        return cls(filters)  # type: ignore
 
     def __init__(self, filters: List[LDAPFilter]):
         self.filters = filters
@@ -732,7 +736,8 @@ class LDAPFilter_not(LDAPFilter):
         if filter_tag not in FILTERS:
             raise UnknownBERTag(filter_tag)
         value = FILTERS[filter_tag].from_wire(filter_content)
-        return cls(value)
+        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
+        return cls(value)  # type: ignore
 
     def __init__(self, value: LDAPFilter):
         self.value = value
@@ -772,6 +777,10 @@ class LDAPFilter_equalityMatch(LDAPAttributeValueAssertion, LDAPFilter):
 
 class LDAPFilter_substrings_string(LDAPAssertionValue):
     _tag_class = TagClasses.CONTEXT
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPFilter_substrings_string":
+        return super().from_wire(content)  # type: ignore
 
     @property
     def as_text(self) -> str:
@@ -869,7 +878,7 @@ class LDAPFilter_substrings(BERSequence, LDAPFilter):
     def as_text(self) -> str:
         initial = None
         final = None
-        any = []
+        any: List[str] = []
 
         for s in self.substrings:
             assert s is not None
@@ -1011,7 +1020,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
             else:
                 raise UnknownBERTag(unknown_tag)
 
-        check(matchValue is not None)
+        assert matchValue is not None
         return cls(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
 
     def __init__(
@@ -1027,12 +1036,12 @@ class LDAPMatchingRuleAssertion(BERSequence):
         self.dnAttributes = dnAttributes
 
     def to_wire(self) -> bytes:
-        to_send = []
+        to_send: List[BERBase] = []
         if self.matchingRule is not None:
             to_send.append(LDAPMatchingRuleAssertion_matchingRule(self.matchingRule))
         if self.type is not None:
             to_send.append(LDAPMatchingRuleAssertion_type(self.type))
-        to_send.append(self.matchValue)
+        to_send.append(LDAPAssertionValue(self.matchValue))
         if self.dnAttributes is not None:
             to_send.append(LDAPMatchingRuleAssertion_dnAttributes(self.dnAttributes))
         return self.wrap(to_send)
@@ -1059,7 +1068,7 @@ class LDAPFilter_extensibleMatch(LDAPMatchingRuleAssertion, LDAPFilter):
             + (":dn" if self.dnAttributes and self.dnAttributes else "")
             + ((":" + self.matchingRule) if self.matchingRule else "")
             + ":="
-            + escape(self.matchValue)
+            + escape(self.matchValue.decode("utf-8"))
             + ")"
         )
 
@@ -1183,6 +1192,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
         filter_tag, filter_content = vals[6]
         if filter_tag not in FILTERS:
             raise UnknownBERTag(filter_tag)
+        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         filter_ = FILTERS[filter_tag].from_wire(filter_content)
         attributes = decode(vals[7], LDAPAttributeSelection).value
 
@@ -1193,7 +1203,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             sizeLimit=sizeLimit,
             timeLimit=timeLimit,
             typesOnly=typesOnly,
-            filter_=filter_,
+            filter_=filter_,  # type: ignore
             attributes=attributes,
         )
 
@@ -1318,7 +1328,7 @@ class LDAPPartialAttributeList(BERSequence):
         self.value = value
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPPartialAttribute(val) for val in self.value])
+        return self.wrap(self.value)
 
 
 # SearchResultEntry ::= [APPLICATION 4] SEQUENCE {

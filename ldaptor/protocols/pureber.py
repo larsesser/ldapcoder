@@ -16,7 +16,7 @@
 #     this protocol definition.
 import abc
 import enum
-from typing import Tuple, List, Optional, Type
+from typing import Tuple, List, Optional, Type, Sequence
 
 # xxxxxxxx
 # |/|\.../
@@ -334,7 +334,7 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
     _tag_is_constructed = True
     _tag = 0x10
 
-    def wrap(self, content: List[BERBase]) -> bytes:
+    def wrap(self, content: Sequence[BERBase]) -> bytes:
         """Helper method to wrap the given BERObjects into a BERSequence."""
         vals = b"".join(x.to_wire() for x in content)
         return bytes((self.tag,)) + int2berlen(len(vals)) + vals
@@ -346,10 +346,6 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
         if bytes_used != len(content):
             raise BERExceptionInsufficientData
         return vals
-
-
-class BERSequenceOf(BERSequence, metaclass=abc.ABCMeta):
-    pass
 
 
 class BERSet(BERSequence, metaclass=abc.ABCMeta):
