@@ -29,45 +29,6 @@ from ldaptor.protocols.pureber import (
 )
 
 
-# CompareRequest ::= [APPLICATION 14] SEQUENCE {
-#      entry           LDAPDN,
-#      ava             AttributeValueAssertion }
-class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
-    _tag_class = TagClasses.APPLICATION
-    _tag = 0x0E
-
-    entry: str
-    ava: LDAPAttributeValueAssertion
-
-    @classmethod
-    def from_wire(cls, content: bytes) -> "LDAPCompareRequest":
-        vals = cls.unwrap(content)
-        check(len(vals) == 2)
-        entry = decode(vals[0], LDAPDN).value
-        ava = decode(vals[1], LDAPAttributeValueAssertion)
-        return cls(entry=entry, ava=ava)
-
-    def __init__(self, entry: str, ava: LDAPAttributeValueAssertion):
-        self.entry = entry
-        self.ava = ava
-
-    def to_wire(self) -> bytes:
-        return self.wrap([LDAPDN(self.entry), self.ava])
-
-    def __repr__(self):
-        l = [
-            f"entry={repr(self.entry)}",
-            f"ava={repr(self.ava)}",
-        ]
-        return "{}({})".format(self.__class__.__name__, ", ".join(l))
-
-
-# CompareResponse ::= [APPLICATION 15] LDAPResult
-class LDAPCompareResponse(LDAPResult):
-    _tag_class = TagClasses.APPLICATION
-    _tag = 0x0F
-
-
 # AbandonRequest ::= [APPLICATION 16] MessageID
 class LDAPAbandonRequest(LDAPProtocolRequest, LDAPMessageId):
     _tag_class = TagClasses.APPLICATION
