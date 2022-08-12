@@ -582,7 +582,7 @@ class LDAPBindResponse(LDAPResult):
             else:
                 raise UnknownBERTag(unknown_tag)
         elif len(vals) == 5:
-            referral = decode(vals[3], LDAPReferral)
+            referral = decode(vals[3], LDAPReferral).value
             serverSaslCreds = decode(vals[4], ServerSaslCreds).value
 
         r = cls(
@@ -604,6 +604,15 @@ class LDAPBindResponse(LDAPResult):
     ):
         super().__init__(resultCode, matchedDN, diagnosticMessage, referral)
         self.serverSaslCreds = serverSaslCreds
+
+    def to_wire(self) -> bytes:
+        ret: List[BERBase] = [LDAPResultCode(self.resultCode), LDAPDN(self.matchedDN),
+                              LDAPString(self.diagnosticMessage)]
+        if self.referral is not None:
+            ret.append(LDAPReferral(self.referral))
+        if self.serverSaslCreds is not None:
+            ret.append(ServerSaslCreds(self.serverSaslCreds))
+        return self.wrap(ret)
 
     def __repr__(self):
         return LDAPResult.__repr__(self)
@@ -1263,7 +1272,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             )
 
 
-class LDAPAttributeValueSet(BERSequence):
+class LDAPAttributeValueSet(BERSet):
     value: List[bytes]
 
     @classmethod
@@ -1677,7 +1686,7 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
         deleteoldrdn = decode(vals[2], BERBoolean).value
         newSuperior = None
         if len(vals) == 4:
-            newSuperior = decode(vals[3], LDAPDN).value
+            newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).value
         return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 
     def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: str = None):
@@ -1689,7 +1698,7 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         ret: List[BERBase] = [LDAPDN(self.entry), LDAPRelativeDN(self.newrdn), BERBoolean(self.deleteoldrdn)]
         if self.newSuperior is not None:
-            ret.append(LDAPDN(self.newSuperior))
+            ret.append(LDAPModifyDNResponse_newSuperior(self.newSuperior))
         return self.wrap(ret)
 
     def __repr__(self):
@@ -1971,7 +1980,6 @@ PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
     LDAPSearchResultEntry.tag: LDAPSearchResultEntry,
     LDAPSearchResultDone.tag: LDAPSearchResultDone,
     LDAPSearchResultReference.tag: LDAPSearchResultReference,
-    LDAPReferral.tag: LDAPReferral,
     LDAPModifyRequest.tag: LDAPModifyRequest,
     LDAPModifyResponse.tag: LDAPModifyResponse,
     LDAPAddRequest.tag: LDAPAddRequest,
