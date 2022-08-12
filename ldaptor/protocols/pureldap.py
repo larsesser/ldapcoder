@@ -276,19 +276,17 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         auth: Union[bytes, Tuple[str, Optional[bytes]]]
         if auth_tag == SimpleAuthentication.tag:
             auth = SimpleAuthentication.from_wire(auth_content).value
-            sasl = False
         elif auth_tag == SaslAuthentication.tag:
             auth_ = SaslAuthentication.from_wire(auth_content)
             auth = (auth_.mechanism, auth_.credentials)
-            sasl = True
         else:
             raise ValueError
 
-        r = cls(version=version, dn=dn, auth=auth, sasl=sasl)
+        r = cls(version=version, dn=dn, auth=auth)
         return r
 
     def __init__(self, version: int, dn: str,
-                 auth: Union[bytes, Tuple[str, Optional[bytes]]], sasl: bool = False):
+                 auth: Union[bytes, Tuple[str, Optional[bytes]]]):
         """Constructor for LDAP Bind Request
 
         For sasl=False, pass a string password for 'auth'
@@ -296,10 +294,12 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         self.version = version
         self.dn = dn
         self.auth = auth
-        # check that the sasl toggle is set iff the auth param is a sasl sequence
-        if not ((not sasl and isinstance(auth, bytes)) or
-                (sasl and isinstance(auth, tuple))):
-            raise ValueError(sasl, auth)
+        if isinstance(auth, bytes):
+            sasl = False
+        elif isinstance(auth, tuple):
+            sasl = True
+        else:
+            raise ValueError
         self.sasl = sasl
 
     def to_wire(self) -> bytes:
