@@ -102,6 +102,11 @@ class LDAPRelativeDN(LDAPString):
     pass
 
 
+# URI ::= LDAPString     -- limited to characters permitted in URIs
+class LDAPURI(LDAPString):
+    pass
+
+
 # AttributeValue ::= OCTET STRING
 class LDAPAttributeValue(BEROctetString):
     pass
@@ -324,10 +329,23 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
 
 # Referral ::= SEQUENCE SIZE (1..MAX) OF uri URI
-# URI ::= LDAPString     -- limited to characters permitted in URIs
-# TODO implement
 class LDAPReferral(BERSequence):
-    pass
+    _tag_class = TagClasses.CONTEXT
+    _tag = 0x03
+    value: List[str]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPReferral":
+        vals = cls.unwrap(content)
+        uris = [decode(val, LDAPURI).value for val in vals]
+        return cls(uris=uris)
+
+    def __init__(self, uris: List[str]):
+        check(len(uris) >= 1)
+        self.value = uris
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPURI(uri) for uri in self.value])
 
 
 class LDAPException(Exception):
@@ -471,7 +489,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
     resultCode: ResultCodes
     matchedDN: str
     diagnosticMessage: str
-    referral: Optional[LDAPReferral]
+    referral: Optional[List[str]]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPResult":
@@ -484,7 +502,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
         referral = None
         if len(vals) == 4:
-            raise NotImplementedError
+            referral = decode(vals[3], LDAPReferral).value
 
         r = cls(
             resultCode=resultCode,
@@ -495,16 +513,18 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         return r
 
     def __init__(self, resultCode: ResultCodes, matchedDN: str, diagnosticMessage: str,
-                 referral=None):
+                 referral: List[str] = None):
         self.resultCode = resultCode
         self.matchedDN = matchedDN
         self.diagnosticMessage = diagnosticMessage
         self.referral = referral
 
     def to_wire(self) -> bytes:
-        assert self.referral is None  # TODO
-        return self.wrap([LDAPResultCode(self.resultCode), LDAPDN(self.matchedDN),
-                          LDAPString(self.diagnosticMessage)])
+        ret: List[BERBase] = [LDAPResultCode(self.resultCode), LDAPDN(self.matchedDN),
+                              LDAPString(self.diagnosticMessage)]
+        if self.referral is not None:
+            ret.append(LDAPReferral(self.referral))
+        return self.wrap(ret)
 
     def __repr__(self):
         l = []
@@ -556,7 +576,7 @@ class LDAPBindResponse(LDAPResult):
         if len(vals) == 4:
             unknown_tag, unknown_content = vals[3]
             if unknown_tag == LDAPReferral.tag:
-                raise NotImplementedError("Not yet supported.")
+                referral = decode(vals[3], LDAPReferral).value
             elif unknown_tag == ServerSaslCreds.tag:
                 serverSaslCreds = decode(vals[3], ServerSaslCreds).value
             else:
@@ -579,7 +599,7 @@ class LDAPBindResponse(LDAPResult):
         resultCode: ResultCodes,
         matchedDN: str,
         diagnosticMessage: str,
-        referral=None,
+        referral: List[str] = None,
         serverSaslCreds: bytes = None,
     ):
         super().__init__(resultCode, matchedDN, diagnosticMessage, referral)
@@ -1810,7 +1830,7 @@ class LDAPExtendedResponse(LDAPResult):
             if unknown_tag == LDAPReferral.tag:
                 if referral is not None:
                     raise ValueError
-                raise NotImplementedError
+                referral = LDAPReferral.from_wire(unknown_content).value
             elif unknown_tag == LDAPExtendedResponse_requestName.tag:
                 if responseName is not None:
                     raise ValueError
@@ -1837,9 +1857,9 @@ class LDAPExtendedResponse(LDAPResult):
         resultCode: ResultCodes,
         matchedDN: str,
         diagnosticMessage: str,
-        referral: Optional[LDAPReferral],
-        responseName: Optional[bytes],
-        responseValue: Optional[bytes],
+        referral: List[str] = None,
+        responseName: bytes = None,
+        responseValue: bytes = None,
     ):
         super().__init__(
             resultCode=resultCode,
@@ -1854,7 +1874,7 @@ class LDAPExtendedResponse(LDAPResult):
         ret: List[BERBase] = [LDAPResultCode(self.resultCode), LDAPDN(self.matchedDN),
                               LDAPString(self.diagnosticMessage)]
         if self.referral is not None:
-            ret.append(self.referral)
+            ret.append(LDAPReferral(self.referral))
         if self.responseName is not None:
             ret.append(LDAPExtendedResponse_requestName(self.responseName))
         if self.responseValue is not None:
