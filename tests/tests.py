@@ -14,6 +14,13 @@ from ldapcoder.berutils import (
     BERBoolean, BEREnumerated, BERInteger, BERNull, BEROctetString, ber_decode_length,
     ber_unwrap,
 )
+from ldapcoder.filter import (
+    LDAPFilter_and, LDAPFilter_approxMatch, LDAPFilter_equalityMatch,
+    LDAPFilter_extensibleMatch, LDAPFilter_greaterOrEqual, LDAPFilter_lessOrEqual,
+    LDAPFilter_not, LDAPFilter_or, LDAPFilter_present, LDAPFilter_substrings,
+    LDAPFilter_substrings_any, LDAPFilter_substrings_final,
+    LDAPFilter_substrings_initial,
+)
 from ldapcoder.ldaputils import (
     LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
 )
@@ -653,7 +660,250 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    # TODO LDAPSearch, LDAPFilter
+    def test_LDAPFilter_present(self):
+        case = """
+87 03 75 69 64 -- The octet string "uid" with type context-specific primitive seven
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_present.tag)
+        result = LDAPFilter_present.from_wire(content)
+
+        expectation = LDAPFilter_present("uid")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_equalityMatch(self):
+        case = """
+a3 0b -- Begin the AttributeValueAssertion sequence with type
+      -- context-specific constructed three
+    04 03 75 69 64 -- The attribute description (octet string "uid")
+    04 04 6a 64 6f 65 -- The assertion value (octet string "jdoe")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_equalityMatch.tag)
+        result = LDAPFilter_equalityMatch.from_wire(content)
+
+        expectation = LDAPFilter_equalityMatch(attributeDesc="uid", assertionValue=b"jdoe")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_greaterOrEqual(self):
+        case = """
+a5 26 -- Begin the AttributeValueAssertion sequence with type
+      -- context-specific constructed five
+    04 0f 63 72 65 61 74 65 54 69 -- The attribute description
+        6d 65 73 74 61 6d 70      -- (octet string "createTimestamp")
+    04 13 32 30 31 37 30 31 30 32 -- The assertion value
+        30 33 30 34 30 35 2e 36   -- (octet string "20170102030405.678Z")
+        37 38 5a
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_greaterOrEqual.tag)
+        result = LDAPFilter_greaterOrEqual.from_wire(content)
+
+        expectation = LDAPFilter_greaterOrEqual(
+            attributeDesc="createTimestamp", assertionValue=b"20170102030405.678Z")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_lessOrEqual(self):
+        case = """
+a6 16 -- Begin the AttributeValueAssertion sequence with type
+      -- context-specific constructed six
+    04 0e 61 63 63 6f 75 6e 74 42 -- The attribute description
+        61 6c 61 6e 63 65         -- (octet string "accountBalance")
+    04 04 31 32 33 34             -- The assertion value (octet string "1234")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_lessOrEqual.tag)
+        result = LDAPFilter_lessOrEqual.from_wire(content)
+
+        expectation = LDAPFilter_lessOrEqual(
+            attributeDesc="accountBalance", assertionValue=b"1234")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_approximateMatch(self):
+        case = """
+a8 11 -- Begin the AttributeValueAssertion sequence with type
+      -- context-specific constructed eight
+    04 09 67 69 76 65 6e 4e 61 6d -- The attribute description
+        65                        -- (octet string "givenName")
+    04 04 4a 6f 68 6e             -- The assertion value (octet string "John")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_approxMatch.tag)
+        result = LDAPFilter_approxMatch.from_wire(content)
+
+        expectation = LDAPFilter_approxMatch(
+            attributeDesc="givenName", assertionValue=b"John")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_substring(self):
+        case = """
+a4 1f -- Begin the SubstringFilter sequence with type
+      -- context-specific constructed four
+    04 02 63 6e -- The attribute description (octet string "cn")
+    30 19 -- Begin the substrings sequence
+        80 03 61 62 63 -- The initial element (octet string "abc") with type
+                       -- context-specific primitive zero
+        81 03 64 65 66 -- The first any element (octet string "def") with type
+                       -- context-specific primitive one
+        81 03 6c 6d 6e -- The second any element (octet string "lmn") with type
+                       -- context-specific primitive one
+        81 03 75 76 77 -- The third any element (octet string "uvw") with type
+                       -- context-specific primitive one
+        82 03 78 79 7a -- The final element (octet string "xyz") with type
+                       -- context-specific primitive two
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_substrings.tag)
+        result = LDAPFilter_substrings.from_wire(content)
+
+        sub1 = LDAPFilter_substrings_initial(b"abc")
+        sub2 = LDAPFilter_substrings_any(b"def")
+        sub3 = LDAPFilter_substrings_any(b"lmn")
+        sub4 = LDAPFilter_substrings_any(b"uvw")
+        sub5 = LDAPFilter_substrings_final(b"xyz")
+        expectation = LDAPFilter_substrings(
+            type_="cn", substrings=[sub1, sub2, sub3, sub4, sub5])
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_extensibleMatch_1(self):
+        case = """
+a9 0b -- Begin the MatchingRuleAssertion sequence with type
+      -- context-specific constructed nine
+    82 03 75 69 64 -- The attribute description (octet string "uid" with type
+                   -- context-specific primitive two)
+    83 04 6a 64 6f 65 -- The assertion value (octet string "jdoe" with type
+                      -- context-specific primitive three
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_extensibleMatch.tag)
+        result = LDAPFilter_extensibleMatch.from_wire(content)
+
+        expectation = LDAPFilter_extensibleMatch(type_="uid", matchValue=b"jdoe")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_extensibleMatch_2(self):
+        case = """
+a9 16 -- Begin the MatchingRuleAssertion sequence with type
+      -- context-specific constructed nine
+    81 0f 63 61 73 65 49 67 6e 6f -- The matching rule ID (octet string
+    72 65 4d 61 74 63 68          -- "caseIgnoreMatch" with type
+                                  -- context-specific primitive one)
+    83 03 66 6f 6f -- The assertion value (octet string "foo" with type
+                   -- context-specific primitive three
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_extensibleMatch.tag)
+        result = LDAPFilter_extensibleMatch.from_wire(content)
+
+        expectation = LDAPFilter_extensibleMatch(
+            matchingRule="caseIgnoreMatch", matchValue=b"foo")
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_extensibleMatch_3(self):
+        case = """
+a9 1f -- Begin the MatchingRuleAssertion sequence with type
+      -- context-specific constructed nine
+    81 0f 63 61 73 65 49 67 6e 6f -- The matching rule ID (octet string
+    72 65 4d 61 74 63 68          -- "caseIgnoreMatch" with type
+    82 03 75 69 64 -- The attribute description (octet string "uid" with type
+                   -- context-specific primitive two)
+    83 04 6a 64 6f 65 -- The assertion value (octet string "jdoe" with type
+                      -- context-specific primitive three
+    84 01 ff -- The dnAttributes flag (boolean true)
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_extensibleMatch.tag)
+        result = LDAPFilter_extensibleMatch.from_wire(content)
+
+        expectation = LDAPFilter_extensibleMatch(
+            matchingRule="caseIgnoreMatch", type_="uid", matchValue=b"jdoe", dnAttributes=True)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_and(self):
+        case = """
+a0 1e -- Begin the and set with type context-specific constructed zero
+    a3 11 -- Begin the AttributeValueAssertion sequence with type
+          -- context-specific constructed three
+        04 09 67 69 76 65 6e 4e 61 6d -- The attribute description
+        65                            -- (octet string "givenName")
+        04 04 4a 6f 68 6e -- The assertion value (octet string "John")
+    a3 09 -- Begin the AttributeValueAssertion sequence with type
+          -- context-specific constructed three
+        04 02 73 6e -- The attribute description (octet string "sn")
+        04 03 44 6f 65 -- The assertion value (octet string "Doe")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_and.tag)
+        result = LDAPFilter_and.from_wire(content)
+
+        filter1 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"John")
+        filter2 = LDAPFilter_equalityMatch(attributeDesc="sn", assertionValue=b"Doe")
+        expectation = LDAPFilter_and(filters=[filter1, filter2])
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_true(self):
+        case = """
+a0 00 -- An empty and set with type context-specific constructed zero
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_and.tag)
+        result = LDAPFilter_and.from_wire(content)
+
+        expectation = LDAPFilter_and(filters=[])
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_or(self):
+        case = """
+a1 2a -- Begin the or set with type context-specific constructed one
+    a3 11 -- Begin the AttributeValueAssertion sequence with type
+          -- context-specific constructed three
+        04 09 67 69 76 65 6e 4e 61 6d -- The attribute description
+        65                            -- (octet string "givenName")
+        04 04 4a 6f 68 6e -- The assertion value (octet string "John")
+    a3 15 -- Begin the AttributeValueAssertion sequence with type
+          -- context-specific constructed three
+        04 09 67 69 76 65 6e 4e 61 6d -- The attribute description
+        65                            -- (octet string "givenName")
+        04 08 4a 6f 6e 61 74 68 61 6e -- The assertion value (octet string "Jonathan")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_or.tag)
+        result = LDAPFilter_or.from_wire(content)
+
+        filter1 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"John")
+        filter2 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"Jonathan")
+        expectation = LDAPFilter_or(filters=[filter1, filter2])
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_false(self):
+        case = """
+a1 00 -- An empty and set with type context-specific constructed zero
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_or.tag)
+        result = LDAPFilter_or.from_wire(content)
+
+        expectation = LDAPFilter_or(filters=[])
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPFilter_not(self):
+        case = """
+a2 13 -- Begin the not filter with type context-specific constructed two
+    a3 11 -- Begin the AttributeValueAssertion sequence with type
+          -- context-specific constructed three
+        04 09 67 69 76 65 6e 4e 61 6d -- The attribute description
+        65                            -- (octet string "givenName")
+        04 04 4a 6f 68 6e -- The assertion value (octet string "John")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPFilter_not.tag)
+        result = LDAPFilter_not.from_wire(content)
+
+        expectation = LDAPFilter_not(value=LDAPFilter_equalityMatch(
+            attributeDesc="givenName", assertionValue=b"John"))
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    # TODO LDAPSearch
 
     def test_LDAPUnbindRequest(self):
         case = """

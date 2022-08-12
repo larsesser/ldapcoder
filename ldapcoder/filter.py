@@ -85,6 +85,7 @@ class LDAPFilter_or(LDAPFilterSet):
 
 
 class LDAPFilter_not(LDAPFilter):
+    _tag_is_constructed = True
     _tag = 0x02
     value: LDAPFilter
 
@@ -210,7 +211,7 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
         check(len(vals) == 2)
 
         type_ = decode(vals[0], LDAPAttributeDescription).value
-        substrings = decode(vals[0], LDAP_substrings).value
+        substrings = decode(vals[1], LDAP_substrings).value
         return cls(type_=type_, substrings=substrings)
 
     def __init__(self, type_: str, substrings: List[LDAPFilter_substrings_string]):
@@ -402,7 +403,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
             to_send.append(LDAPMatchingRuleAssertion_matchingRule(self.matchingRule))
         if self.type is not None:
             to_send.append(LDAPMatchingRuleAssertion_type(self.type))
-        to_send.append(LDAPAssertionValue(self.matchValue))
+        to_send.append(LDAPMatchingRuleAssertion_matchValue(self.matchValue))
         if self.dnAttributes is not None:
             to_send.append(LDAPMatchingRuleAssertion_dnAttributes(self.dnAttributes))
         return self.wrap(to_send)

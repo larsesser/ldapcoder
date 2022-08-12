@@ -2,11 +2,12 @@
 
 import abc
 import string
-from typing import List, Optional, Tuple, Type, TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Tuple, Type, TypeVar
 
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, BERSet, int2berlen,
 )
+
 if TYPE_CHECKING:
     from ldapcoder.result import ResultCodes
 
@@ -58,7 +59,7 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     """Decode a (tag, content) tuple into an instance of the given BER class."""
     tag, content = input_
     assert issubclass(class_, BERBase)
-    check(tag == class_.tag)
+    check(tag == class_.tag, msg=f"Given tag: {tag}, expected tag: {class_.tag}")
     # TODO can we show mypy that T is always a subclass of BERBase?
     return class_.from_wire(content)  # type: ignore
 
