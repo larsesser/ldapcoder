@@ -52,6 +52,11 @@ def smart_escape(s, threshold=0.30):
 
 
 def check(statement: bool, msg: str = "") -> None:
+    """Check that the given statement is true.
+
+    If not, raise an error with the given message. Thought of this like assert statements,
+    with the difference that this one does actually raise exceptions.
+    """
     if not statement:
         raise ValueError(msg)
 
@@ -64,11 +69,8 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     tag, content = input_
     assert issubclass(class_, BERBase)
     check(tag == class_.tag)
-    return class_.from_wire(content)
-
-
-class LDAPInteger(BERInteger):
-    pass
+    # TODO can we show mypy that T is always a subclass of BERBase?
+    return class_.from_wire(content)  # type: ignore
 
 
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,
@@ -213,7 +215,7 @@ class LDAPProtocolResponse(LDAPProtocolOp, metaclass=abc.ABCMeta):
 #                -- 1 and 2 reserved
 #      sasl                    [3] SaslCredentials,
 #      ...  }
-class SimpleAuthentication(BEROctetString):
+class LDAPBindRequest_SimpleAuthentication(BEROctetString):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x00
 
@@ -221,14 +223,14 @@ class SimpleAuthentication(BEROctetString):
 # SaslCredentials ::= SEQUENCE {
 #      mechanism               LDAPString,
 #      credentials             OCTET STRING OPTIONAL }
-class SaslAuthentication(BERSequence):
+class LDAPBindRequest_SaslAuthentication(BERSequence):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x03
     mechanism: str
     credentials: Optional[bytes]
 
     @classmethod
-    def from_wire(cls, content: bytes) -> "SaslAuthentication":
+    def from_wire(cls, content: bytes) -> "LDAPBindRequest_SaslAuthentication":
         vals = cls.unwrap(content)
         check(len(vals) in {1, 2})
 
@@ -274,10 +276,10 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
         auth_tag, auth_content = vals[2]
         auth: Union[bytes, Tuple[str, Optional[bytes]]]
-        if auth_tag == SimpleAuthentication.tag:
-            auth = SimpleAuthentication.from_wire(auth_content).value
-        elif auth_tag == SaslAuthentication.tag:
-            auth_ = SaslAuthentication.from_wire(auth_content)
+        if auth_tag == LDAPBindRequest_SimpleAuthentication.tag:
+            auth = LDAPBindRequest_SimpleAuthentication.from_wire(auth_content).value
+        elif auth_tag == LDAPBindRequest_SaslAuthentication.tag:
+            auth_ = LDAPBindRequest_SaslAuthentication.from_wire(auth_content)
             auth = (auth_.mechanism, auth_.credentials)
         else:
             raise ValueError
@@ -303,17 +305,18 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         self.sasl = sasl
 
     def to_wire(self) -> bytes:
-        auth: Union[SaslAuthentication, SimpleAuthentication]
+        auth: Union[LDAPBindRequest_SaslAuthentication, LDAPBindRequest_SimpleAuthentication]
         if self.sasl:
             assert isinstance(self.auth, tuple)
             # since the credentails for SASL is optional must check first
             # if credentials are None don't send them.
             mechanism = self.auth[0]
             credentials = self.auth[1] if len(self.auth) > 1 else None
-            auth = SaslAuthentication(mechanism=mechanism, credentials=credentials)
+            auth = LDAPBindRequest_SaslAuthentication(
+                mechanism=mechanism, credentials=credentials)
         else:
             assert isinstance(self.auth, bytes)
-            auth = SimpleAuthentication(self.auth)
+            auth = LDAPBindRequest_SimpleAuthentication(self.auth)
         return self.wrap([BERInteger(self.version), LDAPDN(self.dn), auth])
 
     def __repr__(self):
@@ -540,7 +543,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-class ServerSaslCreds(BEROctetString):
+class LDAPBindResponse_serverSaslCreds(BEROctetString):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x07
 
@@ -577,13 +580,13 @@ class LDAPBindResponse(LDAPResult):
             unknown_tag, unknown_content = vals[3]
             if unknown_tag == LDAPReferral.tag:
                 referral = decode(vals[3], LDAPReferral).value
-            elif unknown_tag == ServerSaslCreds.tag:
-                serverSaslCreds = decode(vals[3], ServerSaslCreds).value
+            elif unknown_tag == LDAPBindResponse_serverSaslCreds.tag:
+                serverSaslCreds = decode(vals[3], LDAPBindResponse_serverSaslCreds).value
             else:
                 raise UnknownBERTag(unknown_tag)
         elif len(vals) == 5:
             referral = decode(vals[3], LDAPReferral).value
-            serverSaslCreds = decode(vals[4], ServerSaslCreds).value
+            serverSaslCreds = decode(vals[4], LDAPBindResponse_serverSaslCreds).value
 
         r = cls(
             resultCode=resultCode,
@@ -611,7 +614,7 @@ class LDAPBindResponse(LDAPResult):
         if self.referral is not None:
             ret.append(LDAPReferral(self.referral))
         if self.serverSaslCreds is not None:
-            ret.append(ServerSaslCreds(self.serverSaslCreds))
+            ret.append(LDAPBindResponse_serverSaslCreds(self.serverSaslCreds))
         return self.wrap(ret)
 
     def __repr__(self):
@@ -1935,17 +1938,17 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
 
         responseName = None
         responseValue = None
-        for unkown_tag, unkown_content in vals:
-            if unkown_tag == LDAPIntermediateResponse_responseName.tag:
+        for unknown_tag, unkown_content in vals:
+            if unknown_tag == LDAPIntermediateResponse_responseName.tag:
                 if responseName is not None:
                     raise ValueError
                 responseName = LDAPIntermediateResponse_responseName.from_wire(unkown_content).value
-            elif unkown_tag == LDAPIntermediateResponse_responseValue.tag:
+            elif unknown_tag == LDAPIntermediateResponse_responseValue.tag:
                 if responseValue is not None:
                     raise ValueError
                 responseValue = LDAPIntermediateResponse_responseValue.from_wire(unkown_content).value
             else:
-                raise UnknownBERTag(unkown_tag)
+                raise UnknownBERTag(unknown_tag)
         return cls(responseName=responseName, responseValue=responseValue)
 
     def __init__(self, responseName: bytes = None, responseValue: bytes = None):

@@ -35,13 +35,11 @@ from typing import Tuple, List, Type, Sequence
 
 class UnknownBERTag(Exception):
     def __init__(self, tag):
-        Exception.__init__(self)
+        super().__init__()
         self.tag = tag
 
     def __str__(self):
-        return "BERDecoderContext has no tag 0x{:02x}".format(
-            self.tag
-        )
+        return "Unknown tag 0x{:02x} in current context.".format(self.tag)
 
 
 def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
@@ -66,6 +64,7 @@ def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
 
 
 def int2berlen(i: int) -> bytes:
+    """Calculate the length of an BER object from the length of its content"""
     assert i >= 0
     e = int2ber(i, signed=False)
     if i <= 127:
@@ -78,6 +77,10 @@ def int2berlen(i: int) -> bytes:
 
 
 def int2ber(i: int, signed: bool = True) -> bytes:
+    """Encode an integer as BER content.
+
+    This does not add a tag or the length of the BER object.
+    """
     encoded = b""
     while (signed and (i > 127 or i < -128)) or (not signed and (i > 255)):
         encoded = bytes((i % 256,)) + encoded
@@ -87,6 +90,10 @@ def int2ber(i: int, signed: bool = True) -> bytes:
 
 
 def ber2int(e: bytes, signed: bool = True) -> int:
+    """Decode a BER content to an integer.
+
+    The tag and the length of the BER object need to be handled beforehand.
+    """
     need(e, 1)
     v = 0 + ord(e[0:1])
     if v & 0x80 and signed:
@@ -168,6 +175,7 @@ class BERExceptionInsufficientData(Exception):
 
 
 def need(buf: bytes, n: int) -> None:
+    """Check that the given buffer has at least n bytes left."""
     d = n - len(buf)
     if d > 0:
         raise BERExceptionInsufficientData(d)
