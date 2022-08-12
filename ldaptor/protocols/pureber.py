@@ -44,7 +44,7 @@ class UnknownBERTag(Exception):
         )
 
 
-def berDecodeLength(m: bytes, offset: int = 0) -> Tuple[int, int]:
+def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
     """Extract the length property of a BER element.
 
     m is the bytes representation of the BER element, where its assumed that m[offset]
@@ -359,7 +359,7 @@ def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
         # The first two bytes are necessary, since they decode the tag and the length
         need(raw, 2)
         tag = ber2int(raw[0:1], signed=False)
-        length, lenlen = berDecodeLength(raw, offset=1)
+        length, lenlen = ber_decode_length(raw, offset=1)
 
         # ensure all content is present
         need(raw, 1 + lenlen + length)
