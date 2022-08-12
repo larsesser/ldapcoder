@@ -107,13 +107,6 @@ class LDAPMessage(BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-# UnbindRequest ::= [APPLICATION 2] NULL
-class LDAPUnbindRequest(LDAPProtocolRequest, BERNull):
-    _tag_class = TagClasses.APPLICATION
-    _tag = 0x02
-    needs_answer = 0
-
-
 # Controls ::= SEQUENCE OF control Control
 class LDAPControls(BERSequence):
     _tag_class = TagClasses.CONTEXT
