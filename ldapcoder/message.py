@@ -195,4 +195,6 @@ PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
     LDAPAbandonRequest.tag: LDAPAbandonRequest,
     LDAPCompareRequest.tag: LDAPCompareRequest,
     LDAPCompareResponse.tag: LDAPCompareResponse,
+    # ...
+    LDAPIntermediateResponse.tag: LDAPIntermediateResponse,
 }
