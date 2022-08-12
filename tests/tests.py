@@ -5,19 +5,30 @@ https://ldap.com/ldapv3-wire-protocol-reference/
 and following subpages.
 """
 
+import binascii
 import enum
+import unittest
 from typing import Type
 
-from ldaptor.protocols.pureber import (
-    BERNull, ber_unwrap, ber_decode_length, BERBoolean, BEROctetString, BERInteger, BEREnumerated)
-from ldaptor.protocols.pureldap import (
-    LDAPMessage, LDAPDelRequest, LDAPControl, ResultCodes, LDAPAddResponse, LDAPAbandonRequest,
-    LDAPAddRequest, LDAPAttribute, LDAPBindRequest, LDAPBindResponse, LDAPCompareRequest,
-    LDAPCompareResponse, LDAPAttributeValueAssertion, LDAPDelResponse, LDAPModifyResponse,
-    LDAPModifyRequest, LDAPModify_change, ModifyOperations, LDAPPartialAttribute,
-    LDAPModifyDNRequest, LDAPModifyDNResponse, LDAPUnbindRequest)
-import binascii
-import unittest
+from ldapcoder.berutils import (
+    BERBoolean, BEREnumerated, BERInteger, BERNull, BEROctetString, ber_decode_length,
+    ber_unwrap,
+)
+from ldapcoder.ldaputils import (
+    LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
+)
+from ldapcoder.message import LDAPControl, LDAPMessage
+from ldapcoder.operations.abandon import LDAPAbandonRequest
+from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
+from ldapcoder.operations.bind import LDAPBindRequest, LDAPBindResponse
+from ldapcoder.operations.compare import LDAPCompareRequest, LDAPCompareResponse
+from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
+from ldapcoder.operations.modify import (
+    LDAPModify_change, LDAPModifyRequest, LDAPModifyResponse, ModifyOperations,
+)
+from ldapcoder.operations.modify_dn import LDAPModifyDNRequest, LDAPModifyDNResponse
+from ldapcoder.operations.unbind import LDAPUnbindRequest
+from ldapcoder.result import ResultCodes
 
 
 def unhexlify(hexstring: str) -> bytes:

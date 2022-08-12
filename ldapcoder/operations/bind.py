@@ -1,32 +1,12 @@
 """LDAP protocol message conversion; no application logic here."""
 
-import abc
-import enum
-import string
-from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar
+from typing import List, Optional, Tuple, Union
 
-from ldapcoder.ldaputils import (
-    alloc_ldap_message_id, escape, check, decode, LDAPString, LDAPDN, LDAPRelativeDN,
-    LDAPURI, LDAPMessageId, LDAPProtocolOp, LDAPProtocolRequest, LDAPProtocolResponse,
-    LDAPException, LDAPAttributeDescription, LDAPAssertionValue, LDAPAttributeValueAssertion,
-    LDAPAttributeSelection, LDAPPartialAttribute, LDAPPartialAttributeList,
-    LDAPAttribute, LDAPAttributeList, LDAPOID)
-from ldapcoder.result import LDAPReferral, ResultCodes, LDAPResultCode, LDAPResult
-
-from ldaptor.protocols.pureber import (
-    BERBoolean,
-    BEREnumerated,
-    BERInteger,
-    BERNull,
-    BEROctetString,
-    BERSequence,
-    BERSet,
-    int2berlen,
-    UnknownBERTag,
-    BERBase,
-    TagClasses,
-    ber_unwrap,
+from ldapcoder.berutils import (
+    BERBase, BERInteger, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
+from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, check, decode
+from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
 
 # AuthenticationChoice ::= CHOICE {

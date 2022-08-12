@@ -1,23 +1,11 @@
 """LDAP protocol message conversion; no application logic here."""
 
 import abc
-import enum
 import string
-from typing import Optional, List, Mapping, Type, Union, Tuple, TypeVar
+from typing import List, Optional, Tuple, Type, TypeVar
 
-from ldaptor.protocols.pureber import (
-    BERBoolean,
-    BEREnumerated,
-    BERInteger,
-    BERNull,
-    BEROctetString,
-    BERSequence,
-    BERSet,
-    int2berlen,
-    UnknownBERTag,
-    BERBase,
-    TagClasses,
-    ber_unwrap,
+from ldapcoder.berutils import (
+    BERBase, BERInteger, BEROctetString, BERSequence, BERSet, int2berlen,
 )
 
 next_ldap_message_id = 1

@@ -16,7 +16,7 @@
 #     this protocol definition.
 import abc
 import enum
-from typing import Tuple, List, Type, Sequence
+from typing import List, Sequence, Tuple, Type
 
 # xxxxxxxx
 # |/|\.../
