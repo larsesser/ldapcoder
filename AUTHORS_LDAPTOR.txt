@@ -2,10 +2,7 @@
 Contributions
 =============
 
-.. include:: ../../CONTRIBUTING.rst
-
-Contributors
-============
+This file contains all contributors to ldaptor until this package was forked from ldaptor.
 
 - Anton Gyllenberg
 - Aren Sandersen
