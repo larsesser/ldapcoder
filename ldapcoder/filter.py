@@ -34,7 +34,7 @@ class LDAPFilter(BERBase, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-class LDAPFilterSet(BERSet, LDAPFilter, metaclass=abc.ABCMeta):
+class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
     filters: List[LDAPFilter]
 
     @classmethod
@@ -121,7 +121,7 @@ class LDAPFilter_not(LDAPFilter):
         return "(!" + self.value.as_text + ")"
 
 
-class LDAPFilter_equalityMatch(LDAPAttributeValueAssertion, LDAPFilter):
+class LDAPFilter_equalityMatch(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x03
 
     @property
@@ -199,7 +199,7 @@ class LDAP_substrings(BERSequence):
 #           any     [1] AssertionValue,
 #           final   [2] AssertionValue } -- can occur at most once
 #      }
-class LDAPFilter_substrings(BERSequence, LDAPFilter):
+class LDAPFilter_substrings(LDAPFilter, BERSequence):
     _tag = 0x04
     type: str
     substrings: List[LDAPFilter_substrings_string]
@@ -265,7 +265,7 @@ class LDAPFilter_substrings(BERSequence, LDAPFilter):
         return "(" + self.type + "=" + "*".join([initial] + any + [final]) + ")"
 
 
-class LDAPFilter_greaterOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
+class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x05
 
     @property
@@ -279,7 +279,7 @@ class LDAPFilter_greaterOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
         )
 
 
-class LDAPFilter_lessOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
+class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x06
 
     @property
@@ -293,7 +293,7 @@ class LDAPFilter_lessOrEqual(LDAPAttributeValueAssertion, LDAPFilter):
         )
 
 
-class LDAPFilter_present(LDAPAttributeDescription, LDAPFilter):
+class LDAPFilter_present(LDAPFilter, LDAPAttributeDescription):
     _tag = 0x07
 
     @property
@@ -301,7 +301,7 @@ class LDAPFilter_present(LDAPAttributeDescription, LDAPFilter):
         return "(" + self.value + "=*)"
 
 
-class LDAPFilter_approxMatch(LDAPAttributeValueAssertion, LDAPFilter):
+class LDAPFilter_approxMatch(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x08
 
     @property
@@ -418,7 +418,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
 
 
-class LDAPFilter_extensibleMatch(LDAPMatchingRuleAssertion, LDAPFilter):
+class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
     _tag = 0x09
 
     @property
