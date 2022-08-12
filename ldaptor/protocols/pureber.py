@@ -332,7 +332,7 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
     @staticmethod
     def unwrap(content: bytes) -> List[Tuple[int, bytes]]:
         """Helper method to unwrap the given BERSequence into (tags, contents)."""
-        vals, bytes_used = berUnwrap(content)
+        vals, bytes_used = ber_unwrap(content)
         if bytes_used != len(content):
             raise BERExceptionInsufficientData
         return vals
@@ -344,7 +344,7 @@ class BERSet(BERSequence, metaclass=abc.ABCMeta):
     _tag = 0x11
 
 
-def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
+def ber_unwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
     """Takes a raw BER byte string and returns all of its elements tags and contents.
 
     This does no attempts to decode the contents into BERObjects.

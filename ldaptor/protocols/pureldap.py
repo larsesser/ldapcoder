@@ -17,7 +17,7 @@ from ldaptor.protocols.pureber import (
     UnknownBERTag,
     BERBase,
     TagClasses,
-    berUnwrap,
+    ber_unwrap,
 )
 
 next_ldap_message_id = 1
@@ -754,7 +754,7 @@ class LDAPFilter_not(LDAPFilter):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPFilter_not":
-        [val], bytes_used = berUnwrap(content)
+        [val], bytes_used = ber_unwrap(content)
         check(bytes_used == len(content))
 
         filter_tag, filter_content = val
