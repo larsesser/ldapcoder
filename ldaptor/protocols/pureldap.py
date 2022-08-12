@@ -683,8 +683,8 @@ class LDAPAttributeValueAssertion(BERSequence):
 class LDAPFilter(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.CONTEXT
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def as_text(self) -> str:
         raise NotImplementedError
 
@@ -1041,10 +1041,10 @@ class LDAPMatchingRuleAssertion(BERSequence):
 
     def __init__(
         self,
-        matchingRule: Optional[str],
-        type_: Optional[str],
         matchValue: bytes,
-        dnAttributes: Optional[bool],
+        matchingRule: str = None,
+        type_: str = None,
+        dnAttributes: bool = None,
     ):
         self.matchingRule = matchingRule
         self.type = type_
@@ -1394,8 +1394,6 @@ class LDAPControls(BERSequence):
 #      criticality             BOOLEAN DEFAULT FALSE,
 #      controlValue            OCTET STRING OPTIONAL }
 class LDAPControl(BERSequence):
-    _tag_class = TagClasses.CONTEXT
-    _tag = 0x00
     controlType: bytes
     criticality: Optional[bool]
     controlValue: Optional[bytes]
@@ -1437,6 +1435,11 @@ class LDAPControl(BERSequence):
         if self.controlValue is not None:
             vals.append(BEROctetString(self.controlValue))
         return self.wrap(vals)
+
+    def __repr__(self):
+        criticality = str(self.criticality) if self.criticality is not None else "Default"
+        return (f"{self.__class__.__name__}(controlType={self.controlType},"
+                f" criticality={criticality}, controlValue={self.controlValue})")
 
 
 class ModifyOperations(enum.IntEnum):
@@ -1664,7 +1667,7 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
             newSuperior = decode(vals[3], LDAPDN).value
         return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 
-    def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: Optional[str]):
+    def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: str = None):
         self.entry = entry
         self.newrdn = newrdn
         self.deleteoldrdn = deleteoldrdn
@@ -1785,13 +1788,15 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
             requestValue = decode(vals[1], LDAPExtendedRequest_requestValue).value
         return cls(requestName=requestName, requestValue=requestValue)
 
-    def __init__(self, requestName: bytes, requestValue: Optional[bytes]):
+    def __init__(self, requestName: bytes, requestValue: bytes = None):
         self.requestName = requestName
         self.requestValue = requestValue
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPExtendedRequest_requestName(self.requestName),
-                          LDAPExtendedRequest_requestValue(self.requestValue)])
+        ret: List[BERBase] = [LDAPExtendedRequest_requestName(self.requestName)]
+        if self.requestValue is not None:
+            ret.append(LDAPExtendedRequest_requestValue(self.requestValue))
+        return self.wrap(ret)
 
 
 class LDAPExtendedResponse_requestName(LDAPOID):

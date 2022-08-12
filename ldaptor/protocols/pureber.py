@@ -45,11 +45,18 @@ class UnknownBERTag(Exception):
 
 
 def berDecodeLength(m: bytes, offset: int = 0) -> Tuple[int, int]:
+    """Extract the length property of a BER element.
+
+    m is the bytes representation of the BER element, where its assumed that m[offset]
+    is the first byte which decodes the length property.
+
+    There are two ways to encode the length of an BER object:
+    - Single-Byte-Representation: Lengths up to 127 may be encoded directly as the
+      binary representation of the number.
+    - Multi-Byte-Representation: The most significant bit is set to 1, the remaining
+      bits describe how many of the following bytes are used to describe the length.
     """
-    Return a tuple of (length, lengthLength).
-    m must be atleast one byte long.
-    """
-    l = ber2int(m[offset + 0 : offset + 1])
+    l = ber2int(m[offset + 0 : offset + 1], signed=False)
     ll = 1
     if l & 0x80:
         ll = 1 + (l & 0x7F)
@@ -338,12 +345,12 @@ class BERSet(BERSequence, metaclass=abc.ABCMeta):
 
 
 def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
-    """Takes a raw ber byte string and returns all of its elements tags and contents.
+    """Takes a raw BER byte string and returns all of its elements tags and contents.
 
-    This does no attempts to decode the contents into an BERObjects.
+    This does no attempts to decode the contents into BERObjects.
 
     :returns: A tuple with two elements. The first element contains a list of all
-        objects as tuple with two elements (object tag and objects content). The second
+        objects as tuple with two elements (object tag and object content). The second
         element contains the number of used bytes from the given byte string.
     """
     ret = []
@@ -357,6 +364,8 @@ def berUnwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
         # ensure all content is present
         need(raw, 1 + lenlen + length)
         content = raw[1 + lenlen : 1 + lenlen + length]
+        # strip the now used bytes from raw
+        raw = raw[1+lenlen+length:]
 
         ret.append((tag, content))
         bytes_used += 1 + lenlen + length
