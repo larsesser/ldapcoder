@@ -2,11 +2,13 @@
 
 import abc
 import string
-from typing import List, Optional, Tuple, Type, TypeVar
+from typing import List, Optional, Tuple, Type, TypeVar, TYPE_CHECKING
 
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, BERSet, int2berlen,
 )
+if TYPE_CHECKING:
+    from ldapcoder.result import ResultCodes
 
 next_ldap_message_id = 1
 
