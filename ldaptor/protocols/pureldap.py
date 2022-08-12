@@ -1358,10 +1358,23 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
 
 # SearchResultReference ::= [APPLICATION 19] SEQUENCE
 #             SIZE (1..MAX) OF uri URI
-# TODO implement
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x19
+    value: List[str]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPSearchResultReference":
+        vals = cls.unwrap(content)
+        uris = [decode(val, LDAPURI).value for val in vals]
+        return cls(uris=uris)
+
+    def __init__(self, uris: List[str]):
+        check(len(uris) >= 1)
+        self.value = uris
+
+    def to_wire(self) -> bytes:
+        return self.wrap([LDAPURI(uri) for uri in self.value])
 
 
 # SearchResultDone ::= [APPLICATION 5] LDAPResult
