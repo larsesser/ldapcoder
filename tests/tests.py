@@ -34,6 +34,10 @@ from ldapcoder.operations.modify import (
     LDAPModify_change, LDAPModifyRequest, LDAPModifyResponse, ModifyOperations,
 )
 from ldapcoder.operations.modify_dn import LDAPModifyDNRequest, LDAPModifyDNResponse
+from ldapcoder.operations.search import (
+    DerefAliases, LDAPSearchRequest, LDAPSearchResultDone, LDAPSearchResultEntry,
+    LDAPSearchResultReference, SearchScopes,
+)
 from ldapcoder.operations.unbind import LDAPUnbindRequest
 from ldapcoder.result import ResultCodes
 
@@ -903,7 +907,152 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    # TODO LDAPSearch
+    def test_LDAPSearchRequest(self):
+        case = """
+30 56 -- Begin the LDAPMessage sequence
+    02 01 02 -- The message ID (integer value 2)
+    63 51 -- Begin the search request protocol op
+        04 11 64 63 3d 65 78 61 6d 70 -- The search base DN
+            6c 65 2c 64 63 3d 63 6f -- (octet string "dc=example,dc=com")
+            6d
+        0a 01 02 -- The wholeSubtree scope (enumerated value 2)
+        0a 01 00 -- The neverDerefAliases policy (enumerated value 0)
+        02 02 03 e8 -- The size limit (integer value 1000)
+        02 01 1e -- The time limit (integer value 30)
+        01 01 00 -- The typesOnly flag (boolean false)
+        a0 24 -- Begin an and filter
+            a3 15 -- Begin an equality filter
+                04 0b 6f 62 6a 65 63 74 43 6c -- The attribute description
+                    61 73 73                -- (octet string "objectClass")
+                04 06 70 65 72 73 6f 6e -- The assertion value (octet string "person")
+            a3 0b -- Begin an equality filter
+                04 03 75 69 64 -- The attribute description (octet string "uid")
+                04 04 6a 64 6f 65 -- The assertion value (octet string "jdoe")
+        30 06 -- Begin the set of requested attributes
+            04 01 2a -- Request all user attributes (octet string "*")
+            04 01 2b -- Request all operational attributes (octet string "+")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        filter1 = LDAPFilter_equalityMatch(attributeDesc="objectClass", assertionValue=b"person")
+        filter2 = LDAPFilter_equalityMatch(attributeDesc="uid", assertionValue=b"jdoe")
+        attributes = ["*", "+"]
+        filter_ = LDAPFilter_and([filter1, filter2])
+        operation = LDAPSearchRequest(
+            baseObject="dc=example,dc=com", scope=SearchScopes.wholeSubtree,
+            derefAliases=DerefAliases.neverDerefAliases, sizeLimit=1000, timeLimit=30,
+            typesOnly=False, filter_=filter_, attributes=attributes)
+        expectation = LDAPMessage(msg_id=2, operation=operation)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPSearchResultEntry(self):
+        case = """
+30 49 -- Begin the LDAPMessage sequence
+    02 01 02 -- The message ID (integer value 2)
+    64 44 -- Begin the search result entry protocol op
+        04 11 64 63 3d 65 78 61 6d 70 -- The entry DN
+            6c 65 2c 64 63 3d 63 6f   -- (octet string "dc=example,dc=com")
+            6d
+        30 2f -- Begin the sequence of attributes
+            30 1c -- Begin the first attribute sequence
+                04 0b 6f 62 6a 65 63 74 43 6c -- The attribute description
+                    61 73 73                -- (octet string "objectClass")
+                31 0d -- Begin the set of objectClass values
+                    04 03 74 6f 70 -- The first value (octet string "top")
+                    04 06 64 6f 6d 61 69 6e -- The second value (octet string "domain")
+            30 0f -- Begin the second attribute sequence
+                04 02 64 63 -- The attribute description (octet string "dc")
+                31 09 -- Begin the set of dc values
+                    04 07 65 78 61 6d 70 6c 65 -- The value (octet string "example")
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        attribute1 = LDAPPartialAttribute(type_="objectClass", values=[b"top", b"domain"])
+        attribute2 = LDAPPartialAttribute(type_="dc", values=[b"example"])
+        operation = LDAPSearchResultEntry(
+            objectName="dc=example,dc=com", attributes=[attribute1, attribute2])
+        expectation = LDAPMessage(msg_id=2, operation=operation)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPSearchResultEntry_typesOnly(self):
+        case = """
+30 33 -- Begin the LDAPMessage sequence
+    02 01 02 -- The message ID (integer value 2)
+    64 2e -- Begin the search result entry protocol op
+        04 11 64 63 3d 65 78 61 6d 70 -- The entry DN
+            6c 65 2c 64 63 3d 63 6f   -- (octet string "dc=example,dc=com")
+            6d
+        30 19 -- Begin the sequence of attributes
+            30 0f -- Begin the first attribute sequence
+                04 0b 6f 62 6a 65 63 74 43 6c -- The attribute description
+                    61 73 73                  -- (octet string "objectClass")
+                31 00 -- The empty value set
+            30 06 -- Begin the second attribute sequence
+                04 02 64 63 -- The attribute description (octet string "dc")
+                31 00 -- The empty value set
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        attribute1 = LDAPPartialAttribute(type_="objectClass", values=[])
+        attribute2 = LDAPPartialAttribute(type_="dc", values=[])
+        operation = LDAPSearchResultEntry(
+            objectName="dc=example,dc=com", attributes=[attribute1, attribute2])
+        expectation = LDAPMessage(msg_id=2, operation=operation)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPSearchResultReference(self):
+        case = """
+30 6d -- Begin the LDAPMessage sequence
+    02 01 02 -- The message ID (integer value 2)
+    73 68 -- Begin the search result reference protocol op
+        04 32 6c 64 61 70 3a 2f 2f 64 -- The first referral URI (octet string "ldap://
+            73 31 2e 65 78 61 6d 70   -- ds1.example.com:389/dc=example,dc=com??sub?")
+            6c 65 2e 63 6f 6d 3a 33
+            38 39 2f 64 63 3d 65 78
+            61 6d 70 6c 65 2c 64 63
+            3d 63 6f 6d 3f 3f 73 75
+            62 3f
+        04 32 6c 64 61 70 3a 2f 2f 64 -- The second referral URI (octet string "ldap://
+            73 32 2e 65 78 61 6d 70   -- ds2.example.com:389/dc=example,dc=com??sub?")
+            6c 65 2e 63 6f 6d 3a 33
+            38 39 2f 64 63 3d 65 78
+            61 6d 70 6c 65 2c 64 63
+            3d 63 6f 6d 3f 3f 73 75
+            62 3f
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        operation = LDAPSearchResultReference(
+            ["ldap://ds1.example.com:389/dc=example,dc=com??sub?",
+             "ldap://ds2.example.com:389/dc=example,dc=com??sub?"])
+        expectation = LDAPMessage(msg_id=2, operation=operation)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPSearchResultDone(self):
+        case = """
+30 0c -- Begin the LDAPMessage sequence
+    02 01 02 -- The message ID (integer value 2)
+    65 07 -- Begin the search result done protocol op
+        0a 01 00 -- success result code (enumerated value 0)
+        04 00 -- No matched DN (0-byte octet string)
+        04 00 -- No diagnostic message (0-byte octet string)
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        operation = LDAPSearchResultDone(
+            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage="")
+        expectation = LDAPMessage(msg_id=2, operation=operation)
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
 
     def test_LDAPUnbindRequest(self):
         case = """

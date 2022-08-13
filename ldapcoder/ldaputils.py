@@ -73,8 +73,9 @@ class LDAPString(BEROctetString):
     def from_wire(cls, content: bytes) -> "LDAPString":
         check(len(content) >= 0)
         utf8 = content.decode("utf-8")
-        value = escape(utf8)
-        return cls(value)
+        # TODO should this be escaped or not?
+        # value = escape(utf8)
+        return cls(utf8)
 
     def __init__(self, value: str):
         super().__init__(value)  # type: ignore

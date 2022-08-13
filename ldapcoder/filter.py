@@ -436,6 +436,8 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
 
 
 FILTERS: Mapping[int, Type[LDAPFilter]] = {
+    LDAPFilter_and.tag: LDAPFilter_and,
+    LDAPFilter_or.tag: LDAPFilter_or,
     LDAPFilter_not.tag: LDAPFilter_not,
     LDAPFilter_equalityMatch.tag: LDAPFilter_equalityMatch,
     LDAPFilter_substrings.tag: LDAPFilter_substrings,

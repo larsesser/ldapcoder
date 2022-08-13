@@ -211,7 +211,7 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
 #             SIZE (1..MAX) OF uri URI
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
-    _tag = 0x19
+    _tag = 0x13
     value: List[str]
 
     @classmethod
