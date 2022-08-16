@@ -2,7 +2,7 @@
 
 import abc
 import string
-from typing import TYPE_CHECKING, List, Optional, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, BERSet, int2berlen,
@@ -62,6 +62,34 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     check(tag == class_.tag, msg=f"Given tag: {tag}, expected tag: {class_.tag}")
     # TODO can we show mypy that T is always a subclass of BERBase?
     return class_.from_wire(content)  # type: ignore
+
+
+KT = TypeVar("KT")
+VT = TypeVar("VT")
+
+
+class Registry(Generic[KT, VT]):
+    """Store items and enable the end user of the library to add additional ones."""
+    _items: Dict[KT, VT]
+
+    def __init__(self, items: Dict[KT, VT]):
+        self._items = items
+
+    def __getitem__(self, item: KT):
+        return self._items[item]
+
+    def __contains__(self, item: KT):
+        return item in self._items
+
+    def __call__(self, item: VT) -> VT:
+        """Enables the storage object to be used as decorator on the item definition."""
+        # TODO nicer error message if item is not of expected type
+        self.add(item)
+        return item
+
+    @abc.abstractmethod
+    def add(self, item: VT) -> None:
+        raise NotImplementedError
 
 
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,
