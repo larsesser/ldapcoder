@@ -67,13 +67,13 @@ class MyTests(unittest.TestCase):
         class SampleOperation(BERNull, LDAPProtocolOp):
             _tag_class = TagClasses.PRIVATE
             _tag = 0x00
-        self.assertIn(SampleOperation.tag, PROTOCOL_OPERATIONS)
+        self.assertIn(SampleOperation.tag, PROTOCOL_OPERATIONS)  # type: ignore[arg-type]
 
     def test_extend_enum(self):
         with self.assertRaises(ValueError):
             SearchScopes(999999)
         aenum.extend_enum(SearchScopes, "testScope", 999999)
-        self.assertEqual(999999, SearchScopes.testScope.value)
+        self.assertEqual(999999, SearchScopes.testScope.value)  # type: ignore[attr-defined]
 
     def test_BERLength(self):
         """All cases encode a length of 10."""
@@ -348,6 +348,7 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
+        assert isinstance(result.operation, LDAPBindRequest)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
             version=3, dn="uid=jdoe,ou=People,dc=example,dc=com", auth=b"secret123"))
@@ -385,6 +386,7 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case1), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
+        assert isinstance(result.operation, LDAPBindRequest)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
             version=3, dn="", auth=("CRAM-MD5", None)))
@@ -409,6 +411,7 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case2), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
+        assert isinstance(result.operation, LDAPBindRequest)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPBindRequest(
             version=3, dn="", auth=("CRAM-MD5", b"u:jdoe d52116c87c31d9cc747600f9486d2a1d")))

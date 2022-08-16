@@ -61,7 +61,7 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     assert issubclass(class_, BERBase)
     check(tag == class_.tag, msg=f"Given tag: {tag}, expected tag: {class_.tag}")
     # TODO can we show mypy that T is always a subclass of BERBase?
-    return class_.from_wire(content)  # type: ignore
+    return class_.from_wire(content)  # type: ignore[return-value]
 
 
 KT = TypeVar("KT")
@@ -75,10 +75,10 @@ class Registry(Generic[KT, VT]):
     def __init__(self, items: Dict[KT, VT]):
         self._items = items
 
-    def __getitem__(self, item: KT):
+    def __getitem__(self, item: KT) -> VT:
         return self._items[item]
 
-    def __contains__(self, item: KT):
+    def __contains__(self, item: KT) -> bool:
         return item in self._items
 
     def __call__(self, item: VT) -> VT:
@@ -106,7 +106,7 @@ class LDAPString(BEROctetString):
         return cls(utf8)
 
     def __init__(self, value: str):
-        super().__init__(value)  # type: ignore
+        super().__init__(value)  # type: ignore[arg-type]
 
     def to_wire(self) -> bytes:
         encoded = self.value.encode("utf-8")

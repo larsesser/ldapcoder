@@ -101,7 +101,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             sizeLimit=sizeLimit,
             timeLimit=timeLimit,
             typesOnly=typesOnly,
-            filter_=filter_,  # type: ignore
+            filter_=filter_,  # type: ignore[arg-type]
             attributes=attributes,
         )
 

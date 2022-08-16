@@ -2,7 +2,7 @@
 from typing import List, Optional, Type
 
 from ldapcoder.berutils import (
-    BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
+    BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
 from ldapcoder.ldaputils import (
     LDAPOID, LDAPMessageId, LDAPProtocolOp, Registry, alloc_ldap_message_id, check,
@@ -176,7 +176,7 @@ class LDAPControl(BERSequence):
         self.controlValue = controlValue
 
     def to_wire(self):
-        vals = [LDAPOID(self.controlType)]
+        vals: List[BERBase] = [LDAPOID(self.controlType)]
         if self.criticality is not None:
             vals.append(BERBoolean(self.criticality))
         if self.controlValue is not None:

@@ -92,7 +92,7 @@ class ResultCodes(enum.IntEnum):
     def bytes_name(self) -> bytes:
         return self.name.encode("utf-8")
 
-    def to_exception(self, message: bytes = None):
+    def to_exception(self, message: bytes = None) -> LDAPException:
         if not self.is_error:
             raise RuntimeError("The given resultCode does not correspond to an error.")
         return LDAPException(resultCode=self, message=message)

@@ -46,7 +46,7 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
                 raise UnknownBERTag(filter_tag)
             filters.append(FILTERS[filter_tag].from_wire(filter_content))
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
-        return cls(filters)  # type: ignore
+        return cls(filters)  # type: ignore[arg-type]
 
     def __init__(self, filters: List[LDAPFilter]):
         self.filters = filters
@@ -99,7 +99,7 @@ class LDAPFilter_not(LDAPFilter):
             raise UnknownBERTag(filter_tag)
         value = FILTERS[filter_tag].from_wire(filter_content)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
-        return cls(value)  # type: ignore
+        return cls(value)  # type: ignore[arg-type]
 
     def __init__(self, value: LDAPFilter):
         self.value = value
@@ -142,7 +142,7 @@ class LDAPFilter_substrings_string(LDAPAssertionValue):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPFilter_substrings_string":
-        return super().from_wire(content)  # type: ignore
+        return super().from_wire(content)  # type: ignore[return-value]
 
     @property
     def as_text(self) -> str:
