@@ -1,7 +1,7 @@
 """LDAP protocol message conversion; no application logic here."""
 
 import abc
-from typing import List, Mapping, Optional, Type
+from typing import Any, List, Optional, Type
 
 from ldapcoder.berutils import (
     BERBase, BERBoolean, BERSequence, BERSet, TagClasses, UnknownBERTag, ber_unwrap,
@@ -51,7 +51,7 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
     def __init__(self, filters: List[LDAPFilter]):
         self.filters = filters
 
-    def __eq__(self, rhs):
+    def __eq__(self, rhs: Any) -> bool:
         if not isinstance(rhs, LDAPFilterSet):
             return False
 

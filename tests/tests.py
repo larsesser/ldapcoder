@@ -65,20 +65,20 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expected_tag, tag)
         return content
 
-    def test_registries(self):
+    def test_registries(self) -> None:
         @PROTOCOL_OPERATIONS
         class SampleOperation(BERNull, LDAPProtocolOp):
             _tag_class = TagClasses.PRIVATE
             _tag = 0x00
         self.assertIn(SampleOperation.tag, PROTOCOL_OPERATIONS)  # type: ignore[arg-type]
 
-    def test_extend_enum(self):
+    def test_extend_enum(self) -> None:
         with self.assertRaises(ValueError):
             SearchScopes(999999)
         aenum.extend_enum(SearchScopes, "testScope", 999999)
         self.assertEqual(999999, SearchScopes.testScope.value)  # type: ignore[attr-defined]
 
-    def test_BERLength(self):
+    def test_BERLength(self) -> None:
         """All cases encode a length of 10."""
         cases = ["0a", "81 0a", "82 00 0a", "84 00 00 00 0a",
                  "8a 00 00 00 00 00 00 00 00 00 0a"]
@@ -86,14 +86,14 @@ class MyTests(unittest.TestCase):
             self.assertEqual(
                 (10, len(case.split(" "))), ber_decode_length(unhexlify(case)))
 
-    def test_BERNull(self):
+    def test_BERNull(self) -> None:
         case = "05 00"
         content = self.first_level_unwrap(unhexlify(case), BERNull.tag)
         result = BERNull.from_wire(content)
         self.assertEqual(BERNull(), result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_BERBoolean(self):
+    def test_BERBoolean(self) -> None:
         cases = {True: "01 01 ff", False: "01 01 00"}
         for expectation, case in cases.items():
             content = self.first_level_unwrap(unhexlify(case), BERBoolean.tag)
@@ -101,14 +101,14 @@ class MyTests(unittest.TestCase):
             self.assertEqual(BERBoolean(expectation), result)
             self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_BEROctetString(self):
+    def test_BEROctetString(self) -> None:
         case = "04 06 48 65 6c 6c 6f 21"
         content = self.first_level_unwrap(unhexlify(case), BEROctetString.tag)
         result = BEROctetString.from_wire(content)
         self.assertEqual(BEROctetString(unhexlify("48 65 6c 6c 6f 21")), result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_BERInteger(self):
+    def test_BERInteger(self) -> None:
         cases = {0: "02 01 00", 50: "02 01 32", 50000: "02 03 00 c3 50",
                  -12345: "02 02 cf c7"}
         for expectation, case in cases.items():
@@ -117,7 +117,7 @@ class MyTests(unittest.TestCase):
             self.assertEqual(BERInteger(expectation), result)
             self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_BEREnumerated(self):
+    def test_BEREnumerated(self) -> None:
         class ExampleEnum(enum.IntEnum):
             cool = 0
             uncool = 10
@@ -134,7 +134,7 @@ class MyTests(unittest.TestCase):
             self.assertEqual(ExampleEnumerated(expectation), result)
             self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPMessage(self):
+    def test_LDAPMessage(self) -> None:
         case = """
 30 35 -- Begin the LDAPMessage sequence
     02 01 05 -- The message ID (integer value 5)
@@ -157,7 +157,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPResult_simple(self):
+    def test_LDAPResult_simple(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 03 -- The message ID (integer value 3)
@@ -174,7 +174,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPResult_extended(self):
+    def test_LDAPResult_extended(self) -> None:
         case = """
 30 81 9d -- Begin the LDAPMessage sequence
     02 01 03 -- The message ID (integer value 3)
@@ -211,7 +211,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPResult_referral(self):
+    def test_LDAPResult_referral(self) -> None:
         case = """
 30 81 cf -- Begin the LDAPMessage sequence
     02 01 03 -- The message ID (integer value 3)
@@ -257,7 +257,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPAbandonRequest(self):
+    def test_LDAPAbandonRequest(self) -> None:
         case = """
 30 06 -- Begin the LDAPMessage sequence
     02 01 06 -- The message ID (integer value 6)
@@ -270,7 +270,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPAddRequest(self):
+    def test_LDAPAddRequest(self) -> None:
         case = """
 30 49 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -300,7 +300,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPAddResponse(self):
+    def test_LDAPAddResponse(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -317,7 +317,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPBindRequest_anonymous(self):
+    def test_LDAPBindRequest_anonymous(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 01 --  The message ID (integer value 1)
@@ -335,7 +335,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPBindRequest_simple(self):
+    def test_LDAPBindRequest_simple(self) -> None:
         case = """
 30 39 -- Begin the LDAPMessage sequence
     02 01 01 -- The message ID (integer value 1)
@@ -358,7 +358,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPBindResponse_simple(self):
+    def test_LDAPBindResponse_simple(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 01 -- The message ID (integer value 1)
@@ -375,7 +375,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPBindRequest_sasl(self):
+    def test_LDAPBindRequest_sasl(self) -> None:
         case1 = """
 30 16 -- Begin the LDAPMessage sequence
     02 01 01 -- The message ID (integer value 1)
@@ -420,7 +420,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case2), result.to_wire())
 
-    def test_LDAPBindResponse_sasl(self):
+    def test_LDAPBindResponse_sasl(self) -> None:
         case = """
 30 30 -- Begin the LDAPMessage sequence
     02 01 01 -- The message ID (integer value 1)
@@ -443,7 +443,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPCompareRequest(self):
+    def test_LDAPCompareRequest(self) -> None:
         case = """
 30 45 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -467,7 +467,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPCompareResponse(self):
+    def test_LDAPCompareResponse(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -484,7 +484,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPDelRequest(self):
+    def test_LDAPDelRequest(self) -> None:
         case = """
 30 29 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -502,7 +502,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPDelResponse(self):
+    def test_LDAPDelResponse(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -521,7 +521,7 @@ class MyTests(unittest.TestCase):
 
     # TODO LDAPExtendedRequest, LDAPExtendedResponse
 
-    def test_LDAPModifyRequest(self):
+    def test_LDAPModifyRequest(self) -> None:
         case = """
 30 81 80 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -573,7 +573,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPModifyResponse(self):
+    def test_LDAPModifyResponse(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -590,7 +590,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPModifyDNRequest_rename(self):
+    def test_LDAPModifyDNRequest_rename(self) -> None:
         case = """
 30 3c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -612,7 +612,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPModifyDNRequest_move(self):
+    def test_LDAPModifyDNRequest_move(self) -> None:
         case = """
 30 5c -- Begin the LDAPMessage sequence
     02 01 03 -- The message ID (integer value 3)
@@ -639,7 +639,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPModifyDNRequest_combined(self):
+    def test_LDAPModifyDNRequest_combined(self) -> None:
         case = """
 30 58 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -666,7 +666,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPModifyDNResponse(self):
+    def test_LDAPModifyDNResponse(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -683,7 +683,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_present(self):
+    def test_LDAPFilter_present(self) -> None:
         case = """
 87 03 75 69 64 -- The octet string "uid" with type context-specific primitive seven
 """
@@ -694,7 +694,7 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_equalityMatch(self):
+    def test_LDAPFilter_equalityMatch(self) -> None:
         case = """
 a3 0b -- Begin the AttributeValueAssertion sequence with type
       -- context-specific constructed three
@@ -708,7 +708,7 @@ a3 0b -- Begin the AttributeValueAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_greaterOrEqual(self):
+    def test_LDAPFilter_greaterOrEqual(self) -> None:
         case = """
 a5 26 -- Begin the AttributeValueAssertion sequence with type
       -- context-specific constructed five
@@ -726,7 +726,7 @@ a5 26 -- Begin the AttributeValueAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_lessOrEqual(self):
+    def test_LDAPFilter_lessOrEqual(self) -> None:
         case = """
 a6 16 -- Begin the AttributeValueAssertion sequence with type
       -- context-specific constructed six
@@ -742,7 +742,7 @@ a6 16 -- Begin the AttributeValueAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_approximateMatch(self):
+    def test_LDAPFilter_approximateMatch(self) -> None:
         case = """
 a8 11 -- Begin the AttributeValueAssertion sequence with type
       -- context-specific constructed eight
@@ -758,7 +758,7 @@ a8 11 -- Begin the AttributeValueAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_substring(self):
+    def test_LDAPFilter_substring(self) -> None:
         case = """
 a4 1f -- Begin the SubstringFilter sequence with type
       -- context-specific constructed four
@@ -788,7 +788,7 @@ a4 1f -- Begin the SubstringFilter sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_extensibleMatch_1(self):
+    def test_LDAPFilter_extensibleMatch_1(self) -> None:
         case = """
 a9 0b -- Begin the MatchingRuleAssertion sequence with type
       -- context-specific constructed nine
@@ -804,7 +804,7 @@ a9 0b -- Begin the MatchingRuleAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_extensibleMatch_2(self):
+    def test_LDAPFilter_extensibleMatch_2(self) -> None:
         case = """
 a9 16 -- Begin the MatchingRuleAssertion sequence with type
       -- context-specific constructed nine
@@ -822,7 +822,7 @@ a9 16 -- Begin the MatchingRuleAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_extensibleMatch_3(self):
+    def test_LDAPFilter_extensibleMatch_3(self) -> None:
         case = """
 a9 1f -- Begin the MatchingRuleAssertion sequence with type
       -- context-specific constructed nine
@@ -842,7 +842,7 @@ a9 1f -- Begin the MatchingRuleAssertion sequence with type
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_and(self):
+    def test_LDAPFilter_and(self) -> None:
         case = """
 a0 1e -- Begin the and set with type context-specific constructed zero
     a3 11 -- Begin the AttributeValueAssertion sequence with type
@@ -864,7 +864,7 @@ a0 1e -- Begin the and set with type context-specific constructed zero
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_true(self):
+    def test_LDAPFilter_true(self) -> None:
         case = """
 a0 00 -- An empty and set with type context-specific constructed zero
 """
@@ -875,7 +875,7 @@ a0 00 -- An empty and set with type context-specific constructed zero
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_or(self):
+    def test_LDAPFilter_or(self) -> None:
         case = """
 a1 2a -- Begin the or set with type context-specific constructed one
     a3 11 -- Begin the AttributeValueAssertion sequence with type
@@ -898,7 +898,7 @@ a1 2a -- Begin the or set with type context-specific constructed one
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_false(self):
+    def test_LDAPFilter_false(self) -> None:
         case = """
 a1 00 -- An empty and set with type context-specific constructed zero
 """
@@ -909,7 +909,7 @@ a1 00 -- An empty and set with type context-specific constructed zero
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPFilter_not(self):
+    def test_LDAPFilter_not(self) -> None:
         case = """
 a2 13 -- Begin the not filter with type context-specific constructed two
     a3 11 -- Begin the AttributeValueAssertion sequence with type
@@ -926,7 +926,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPSearchRequest(self):
+    def test_LDAPSearchRequest(self) -> None:
         case = """
 30 56 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -966,7 +966,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPSearchResultEntry(self):
+    def test_LDAPSearchResultEntry(self) -> None:
         case = """
 30 49 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -997,7 +997,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPSearchResultEntry_typesOnly(self):
+    def test_LDAPSearchResultEntry_typesOnly(self) -> None:
         case = """
 30 33 -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -1025,7 +1025,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPSearchResultReference(self):
+    def test_LDAPSearchResultReference(self) -> None:
         case = """
 30 6d -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -1055,7 +1055,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPSearchResultDone(self):
+    def test_LDAPSearchResultDone(self) -> None:
         case = """
 30 0c -- Begin the LDAPMessage sequence
     02 01 02 -- The message ID (integer value 2)
@@ -1073,7 +1073,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    def test_LDAPUnbindRequest(self):
+    def test_LDAPUnbindRequest(self) -> None:
         case = """
 30 05 -- Begin the LDAPMessage sequence
     02 01 03 -- The message ID (integer value 3)

@@ -182,7 +182,7 @@ class LDAPControl(BERSequence):
         self.criticality = criticality
         self.controlValue = controlValue
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         vals: List[BERBase] = [LDAPOID(self.controlType)]
         if self.criticality is not None:
             vals.append(BERBoolean(self.criticality))

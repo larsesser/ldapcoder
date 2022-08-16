@@ -168,7 +168,7 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
         self.objectName = objectName
         self.attributes = attributes
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         return self.wrap([
             LDAPDN(self.objectName), LDAPPartialAttributeList(self.attributes)])
 

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 next_ldap_message_id = 1
 
 
-def alloc_ldap_message_id():
+def alloc_ldap_message_id() -> int:
     global next_ldap_message_id
     r = next_ldap_message_id
     next_ldap_message_id = next_ldap_message_id + 1
@@ -30,15 +30,14 @@ def escape(s: str) -> str:
     return s
 
 
-def binary_escape(s):
+def binary_escape(s: str) -> str:
     return "".join(f"\\{ord(c):02x}" for c in s)
 
 
-def smart_escape(s, threshold=0.30):
+def smart_escape(s: str, threshold: float = 0.30) -> str:
     binary_count = sum(c not in string.printable for c in s)
     if float(binary_count) / float(len(s)) > threshold:
         return binary_escape(s)
-
     return escape(s)
 
 

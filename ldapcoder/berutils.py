@@ -16,7 +16,7 @@
 #     this protocol definition.
 import abc
 import enum
-from typing import List, Sequence, Tuple, Type
+from typing import Any, Callable, List, Sequence, Tuple, Type
 
 # xxxxxxxx
 # |/|\.../
@@ -34,11 +34,11 @@ from typing import List, Sequence, Tuple, Type
 
 
 class UnknownBERTag(Exception):
-    def __init__(self, tag):
+    def __init__(self, tag: int) -> None:
         super().__init__()
         self.tag = tag
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Unknown tag 0x{:02x} in current context.".format(self.tag)
 
 
@@ -104,10 +104,10 @@ def ber2int(e: bytes, signed: bool = True) -> int:
 
 
 class ClassProperty(object):
-    def __init__(self, fget):
+    def __init__(self, fget: Callable[[Any], Any]) -> None:
         self.fget = fget
 
-    def __get__(self, obj, class_=None):
+    def __get__(self, obj: Any, class_: Any = None) -> Any:
         if class_ is None:
             class_ = type(obj)
         return self.fget.__get__(obj, class_)()
@@ -136,24 +136,23 @@ class BERBase(metaclass=abc.ABCMeta):
     tag = ClassProperty(__tag)
 
     @abc.abstractmethod
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.to_wire())
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, BERBase):
             return NotImplemented
         return self.to_wire() == other.to_wire()
 
-    def __ne__(self, other):
+    def __ne__(self, other: Any) -> bool:
         if not isinstance(other, BERBase):
             return NotImplemented
-
         return self.to_wire() != other.to_wire()
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.to_wire())
 
     @abc.abstractmethod
@@ -196,14 +195,14 @@ class BERInteger(BERBase):
         assert len(content) > 0
         return cls(ber2int(content))
 
-    def __init__(self, value: int):
+    def __init__(self, value: int) -> None:
         """Create a new BERInteger object.
         value is an integer.
         """
         assert value is not None
         self.value = value
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
@@ -221,11 +220,11 @@ class BEROctetString(BERBase):
         assert len(content) >= 0
         return cls(content)
 
-    def __init__(self, value: bytes,):
+    def __init__(self, value: bytes) -> None:
         assert value is not None
         self.value = value
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         return bytes((self.tag,)) + int2berlen(len(self.value)) + self.value
 
     def __repr__(self) -> str:
@@ -237,7 +236,7 @@ class BERNull(BERBase):
     _tag = 0x05
     value = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     @classmethod
@@ -245,7 +244,7 @@ class BERNull(BERBase):
         assert len(content) == 0
         return cls()
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         return bytes((self.tag,)) + bytes((0,))
 
     def __repr__(self) -> str:
@@ -262,14 +261,14 @@ class BERBoolean(BERBase):
         assert len(content) > 0
         return cls(bool(ber2int(content)))
 
-    def __init__(self, value: bool):
+    def __init__(self, value: bool) -> None:
         """Create a new BERInteger object.
         value is an integer.
         """
         assert value is not None
         self.value = value
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         value = 0xFF if self.value else 0x00
         return bytes((self.tag,)) + int2berlen(1) + bytes((value,))
 
@@ -292,11 +291,11 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
         assert len(content) > 0
         return cls(cls.enum_cls()(ber2int(content)))
 
-    def __init__(self, value: enum.IntEnum):
+    def __init__(self, value: enum.IntEnum) -> None:
         assert value is not None
         self.value = value
 
-    def to_wire(self):
+    def to_wire(self) -> bytes:
         encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
