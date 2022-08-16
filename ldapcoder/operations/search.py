@@ -14,10 +14,12 @@ from ldapcoder.ldaputils import (
 from ldapcoder.result import LDAPResult
 
 
+@enum.unique
 class SearchScopes(enum.IntEnum):
     baseObject = 0
     singleLevel = 1
     wholeSubtree = 2
+    # ...
 
 
 class LDAPSearchScope(BEREnumerated):
@@ -28,6 +30,7 @@ class LDAPSearchScope(BEREnumerated):
         return SearchScopes
 
 
+@enum.unique
 class DerefAliases(enum.IntEnum):
     neverDerefAliases = 0
     derefInSearching = 1

@@ -10,6 +10,7 @@ from ldapcoder.ldaputils import (
 from ldapcoder.result import LDAPResult
 
 
+@enum.unique
 class ModifyOperations(enum.IntEnum):
     add = 0
     delete = 1

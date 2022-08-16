@@ -113,6 +113,7 @@ class ClassProperty(object):
         return self.fget.__get__(obj, class_)()
 
 
+@enum.unique
 class TagClasses(enum.IntEnum):
     UNIVERSAL = 0x00
     APPLICATION = 0x40

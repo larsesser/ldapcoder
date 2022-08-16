@@ -29,6 +29,7 @@ class LDAPReferral(BERSequence):
         return self.wrap([LDAPURI(uri) for uri in self.value])
 
 
+@enum.unique
 class ResultCodes(enum.IntEnum):
     success = 0
     operationsError = 1
