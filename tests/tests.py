@@ -29,7 +29,10 @@ from ldapcoder.ldaputils import (
 from ldapcoder.message import PROTOCOL_OPERATIONS, LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
 from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
-from ldapcoder.operations.bind import LDAPBindRequest, LDAPBindResponse
+from ldapcoder.operations.bind import (
+    LDAPBindRequest, LDAPBindRequest_SaslAuthentication,
+    LDAPBindRequest_SimpleAuthentication, LDAPBindResponse,
+)
 from ldapcoder.operations.compare import LDAPCompareRequest, LDAPCompareResponse
 from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
 from ldapcoder.operations.modify import (
@@ -328,7 +331,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="", auth=b""))
+            version=3, dn="", auth=LDAPBindRequest_SimpleAuthentication(b"")))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -348,12 +351,11 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
-        assert isinstance(result.operation, LDAPBindRequest)
 
+        auth = LDAPBindRequest_SimpleAuthentication(b"secret123")
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="uid=jdoe,ou=People,dc=example,dc=com", auth=b"secret123"))
+            version=3, dn="uid=jdoe,ou=People,dc=example,dc=com", auth=auth))
         self.assertEqual(expectation, result)
-        self.assertFalse(result.operation.sasl)
         self.assertEqual(unhexlify(case), result.to_wire())
 
     def test_LDAPBindResponse_simple(self):
@@ -386,12 +388,11 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case1), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
-        assert isinstance(result.operation, LDAPBindRequest)
 
+        auth = LDAPBindRequest_SaslAuthentication(mechanism="CRAM-MD5")
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="", auth=("CRAM-MD5", None)))
+            version=3, dn="", auth=auth))
         self.assertEqual(expectation, result)
-        self.assertTrue(result.operation.sasl)
         self.assertEqual(unhexlify(case1), result.to_wire())
 
         case2 = """
@@ -411,12 +412,12 @@ class MyTests(unittest.TestCase):
 """
         content = self.first_level_unwrap(unhexlify(case2), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
-        assert isinstance(result.operation, LDAPBindRequest)
 
+        auth = LDAPBindRequest_SaslAuthentication(
+            mechanism="CRAM-MD5", credentials=b"u:jdoe d52116c87c31d9cc747600f9486d2a1d")
         expectation = LDAPMessage(msg_id=2, operation=LDAPBindRequest(
-            version=3, dn="", auth=("CRAM-MD5", b"u:jdoe d52116c87c31d9cc747600f9486d2a1d")))
+            version=3, dn="", auth=auth))
         self.assertEqual(expectation, result)
-        self.assertTrue(result.operation.sasl)
         self.assertEqual(unhexlify(case2), result.to_wire())
 
     def test_LDAPBindResponse_sasl(self):

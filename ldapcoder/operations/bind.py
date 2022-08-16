@@ -1,11 +1,14 @@
 """LDAP protocol message conversion; no application logic here."""
 
-from typing import List, Optional, Tuple, Union
+import abc
+from typing import List, Optional, Type
 
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
-from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, check, decode
+from ldapcoder.ldaputils import (
+    LDAPDN, LDAPProtocolRequest, LDAPString, Registry, check, decode,
+)
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
 
@@ -14,16 +17,18 @@ from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCod
 #                -- 1 and 2 reserved
 #      sasl                    [3] SaslCredentials,
 #      ...  }
-class LDAPBindRequest_SimpleAuthentication(BEROctetString):
+class LDAPAuthenticationChoice(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.CONTEXT
+
+
+class LDAPBindRequest_SimpleAuthentication(LDAPAuthenticationChoice, BEROctetString):
     _tag = 0x00
 
 
 # SaslCredentials ::= SEQUENCE {
 #      mechanism               LDAPString,
 #      credentials             OCTET STRING OPTIONAL }
-class LDAPBindRequest_SaslAuthentication(BERSequence):
-    _tag_class = TagClasses.CONTEXT
+class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
     _tag = 0x03
     mechanism: str
     credentials: Optional[bytes]
@@ -62,8 +67,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     _tag = 0x00
     version: int
     dn: str
-    auth: Union[bytes, Tuple[str, Optional[bytes]]]
-    sasl: bool
+    auth: LDAPAuthenticationChoice
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindRequest":
@@ -74,49 +78,21 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         dn = decode(vals[1], LDAPDN).value
 
         auth_tag, auth_content = vals[2]
-        auth: Union[bytes, Tuple[str, Optional[bytes]]]
-        if auth_tag == LDAPBindRequest_SimpleAuthentication.tag:
-            auth = LDAPBindRequest_SimpleAuthentication.from_wire(auth_content).value
-        elif auth_tag == LDAPBindRequest_SaslAuthentication.tag:
-            auth_ = LDAPBindRequest_SaslAuthentication.from_wire(auth_content)
-            auth = (auth_.mechanism, auth_.credentials)
-        else:
-            raise ValueError
+        if auth_tag not in AUTHENTICATION_CHOICES:
+            raise UnknownBERTag(auth_tag)
+        auth = AUTHENTICATION_CHOICES[auth_tag].from_wire(auth_content)
+        assert isinstance(auth, LDAPAuthenticationChoice)
 
         r = cls(version=version, dn=dn, auth=auth)
         return r
 
-    def __init__(self, version: int, dn: str,
-                 auth: Union[bytes, Tuple[str, Optional[bytes]]]):
-        """Constructor for LDAP Bind Request
-
-        For sasl=False, pass a string password for 'auth'
-        For sasl=True, pass a tuple of (mechanism, credentials) for 'auth'"""
+    def __init__(self, version: int, dn: str, auth: LDAPAuthenticationChoice):
         self.version = version
         self.dn = dn
         self.auth = auth
-        if isinstance(auth, bytes):
-            sasl = False
-        elif isinstance(auth, tuple):
-            sasl = True
-        else:
-            raise ValueError
-        self.sasl = sasl
 
     def to_wire(self) -> bytes:
-        auth: Union[LDAPBindRequest_SaslAuthentication, LDAPBindRequest_SimpleAuthentication]
-        if self.sasl:
-            assert isinstance(self.auth, tuple)
-            # since the credentails for SASL is optional must check first
-            # if credentials are None don't send them.
-            mechanism = self.auth[0]
-            credentials = self.auth[1] if len(self.auth) > 1 else None
-            auth = LDAPBindRequest_SaslAuthentication(
-                mechanism=mechanism, credentials=credentials)
-        else:
-            assert isinstance(self.auth, bytes)
-            auth = LDAPBindRequest_SimpleAuthentication(self.auth)
-        return self.wrap([BERInteger(self.version), LDAPDN(self.dn), auth])
+        return self.wrap([BERInteger(self.version), LDAPDN(self.dn), self.auth])
 
     def __repr__(self):
         auth = "*" * len(self.auth)
@@ -128,6 +104,19 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
             l.append("tag=%d" % self.tag)
         l.append("sasl=%s" % repr(self.sasl))
         return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+
+
+class AuthenticationChoiceRegistry(Registry[int, Type[LDAPAuthenticationChoice]]):
+    def add(self, item: Type[LDAPAuthenticationChoice]) -> None:
+        if item.tag in self._items:
+            raise RuntimeError
+        self._items[item.tag] = item
+
+
+AUTHENTICATION_CHOICES = AuthenticationChoiceRegistry({
+    LDAPBindRequest_SimpleAuthentication.tag: LDAPBindRequest_SimpleAuthentication,
+    LDAPBindRequest_SaslAuthentication.tag: LDAPBindRequest_SaslAuthentication,
+})
 
 
 class LDAPBindResponse_serverSaslCreds(BEROctetString):
