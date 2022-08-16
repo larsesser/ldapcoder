@@ -10,6 +10,8 @@ import enum
 import unittest
 from typing import Type
 
+import aenum
+
 from ldapcoder.berutils import (
     BERBoolean, BEREnumerated, BERInteger, BERNull, BEROctetString, TagClasses,
     ber_decode_length, ber_unwrap,
@@ -66,6 +68,12 @@ class MyTests(unittest.TestCase):
             _tag_class = TagClasses.PRIVATE
             _tag = 0x00
         self.assertIn(SampleOperation.tag, PROTOCOL_OPERATIONS)
+
+    def test_extend_enum(self):
+        with self.assertRaises(ValueError):
+            SearchScopes(999999)
+        aenum.extend_enum(SearchScopes, "testScope", 999999)
+        self.assertEqual(999999, SearchScopes.testScope.value)
 
     def test_BERLength(self):
         """All cases encode a length of 10."""
