@@ -16,7 +16,9 @@ from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
 from ldapcoder.operations.extended import (
     EXTENDED_REQUESTS, EXTENDED_RESPONSES, LDAPExtendedRequest, LDAPExtendedResponse,
 )
-from ldapcoder.operations.intermediate import LDAPIntermediateResponse
+from ldapcoder.operations.intermediate import (
+    INTERMEDIATE_RESPONSES, LDAPIntermediateResponse,
+)
 from ldapcoder.operations.modify import LDAPModifyRequest, LDAPModifyResponse
 from ldapcoder.operations.modify_dn import LDAPModifyDNRequest, LDAPModifyDNResponse
 from ldapcoder.operations.search import (
@@ -80,6 +82,11 @@ class LDAPMessage(BERSequence):
                 and operation.responseName is not None
                 and operation.responseName in EXTENDED_RESPONSES):
             operation = EXTENDED_RESPONSES[operation.responseName].from_wire(operation_content)
+        # use special IntermediateResponse class if available
+        elif (isinstance(operation, LDAPIntermediateResponse)
+              and operation.responseName is not None
+              and operation.responseName in INTERMEDIATE_RESPONSES):
+            operation = INTERMEDIATE_RESPONSES[operation.responseName].from_wire(operation_content)
         assert isinstance(operation, LDAPProtocolOp)
 
         controls = None
