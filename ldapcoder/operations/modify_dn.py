@@ -53,17 +53,12 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
             ret.append(LDAPModifyDNResponse_newSuperior(self.newSuperior))
         return self.wrap(ret)
 
-    def __repr__(self):
-        l = [
-            "entry=%s" % repr(self.entry),
-            "newrdn=%s" % repr(self.newrdn),
-            "deleteoldrdn=%s" % repr(self.deleteoldrdn),
-        ]
+    def __repr__(self) -> str:
+        attributes = [f"entry={self.entry}", f"newrdn={self.newrdn}",
+                      f"deleteoldrdn={self.deleteoldrdn}"]
         if self.newSuperior is not None:
-            l.append("newSuperior=%s" % repr(self.newSuperior))
-        if self.tag != self.__class__.tag:
-            l.append("tag=%d" % self.tag)
-        return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+            attributes.append(f"newSuperior={self.newSuperior}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # ModifyDNResponse ::= [APPLICATION 13] LDAPResult

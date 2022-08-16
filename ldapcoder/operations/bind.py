@@ -57,6 +57,12 @@ class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
             ret.append(BEROctetString(self.credentials))
         return self.wrap(ret)
 
+    def __repr__(self) -> str:
+        attributes = [f"mechanism={self.mechanism}"]
+        if self.credentials:
+            attributes.append(f"credentials={self.credentials!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
 
 # BindRequest ::= [APPLICATION 0] SEQUENCE {
 #      version                 INTEGER (1 ..  127),
@@ -94,16 +100,9 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([BERInteger(self.version), LDAPDN(self.dn), self.auth])
 
-    def __repr__(self):
-        auth = "*" * len(self.auth)
-        l = []
-        l.append("version=%d" % self.version)
-        l.append("dn=%s" % repr(self.dn))
-        l.append("auth=%s" % repr(auth))
-        if self.tag != self.__class__.tag:
-            l.append("tag=%d" % self.tag)
-        l.append("sasl=%s" % repr(self.sasl))
-        return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+    def __repr__(self) -> str:
+        attributes = [f"version={self.version}", f"dn={self.dn}", f"auth={self.auth!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 class AuthenticationChoiceRegistry(Registry[int, Type[LDAPAuthenticationChoice]]):
@@ -122,15 +121,6 @@ AUTHENTICATION_CHOICES = AuthenticationChoiceRegistry({
 class LDAPBindResponse_serverSaslCreds(BEROctetString):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x07
-
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%s)" % self.value
-        else:
-            return self.__class__.__name__ + "(value=%s, tag=%d)" % (
-                self.value,
-                self.tag,
-            )
 
 
 # BindResponse ::= [APPLICATION 1] SEQUENCE {
@@ -193,5 +183,11 @@ class LDAPBindResponse(LDAPResult):
             ret.append(LDAPBindResponse_serverSaslCreds(self.serverSaslCreds))
         return self.wrap(ret)
 
-    def __repr__(self):
-        return LDAPResult.__repr__(self)
+    def __repr__(self) -> str:
+        attributes = [f"resultCode={self.resultCode!r}", f"matchedDN={self.matchedDN}",
+                      f"diagnosticMessage={self.diagnosticMessage}"]
+        if self.referral:
+            attributes.append(f"referral={self.referral}")
+        if self.serverSaslCreds:
+            attributes.append(f"serverSaslCred={self.serverSaslCreds!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"

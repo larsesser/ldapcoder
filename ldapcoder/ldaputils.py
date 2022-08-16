@@ -196,21 +196,10 @@ class LDAPAttributeValueAssertion(BERSequence):
         return self.wrap([LDAPAttributeDescription(self.attributeDesc),
                           LDAPAssertionValue(self.assertionValue)])
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return (
-                self.__class__.__name__
-                + "(attributeDesc={}, assertionValue={})".format(
-                    repr(self.attributeDesc),
-                    repr(self.assertionValue),
-                )
-            )
-        else:
-            return (
-                self.__class__.__name__
-                + "(attributeDesc=%s, assertionValue=%s, tag=%d)"
-                % (repr(self.attributeDesc), repr(self.assertionValue), self.tag)
-            )
+    def __repr__(self) -> str:
+        attributes = [f"attributeDesc={self.attributeDesc}",
+                      f"assertionValue={self.assertionValue!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # AttributeSelection ::= SEQUENCE OF selector LDAPString
@@ -230,6 +219,9 @@ class LDAPAttributeSelection(BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPString(val) for val in self.value])
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value})"
+
 
 class LDAPAttributeValueSet(BERSet):
     value: List[bytes]
@@ -244,6 +236,9 @@ class LDAPAttributeValueSet(BERSet):
 
     def to_wire(self) -> bytes:
         return self.wrap([LDAPAttributeValue(val) for val in self.value])
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
 
 
 # PartialAttribute ::= SEQUENCE {
@@ -269,6 +264,10 @@ class LDAPPartialAttribute(BERSequence):
         return self.wrap([
             LDAPAttributeDescription(self.type_), LDAPAttributeValueSet(self.values)])
 
+    def __repr__(self) -> str:
+        attributes = [f"type_={self.type_}", f"values={self.values!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
 
 # PartialAttributeList ::= SEQUENCE OF
 #        partialAttribute PartialAttribute
@@ -285,6 +284,9 @@ class LDAPPartialAttributeList(BERSequence):
 
     def to_wire(self) -> bytes:
         return self.wrap(self.value)
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r}"
 
 
 # Attribute ::= PartialAttribute(WITH COMPONENTS {
@@ -310,6 +312,9 @@ class LDAPAttributeList(BERSequence):
 
     def to_wire(self) -> bytes:
         return self.wrap(self.value)
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r}"
 
 
 # LDAPOID ::= OCTET STRING -- Constrained to <numericoid>

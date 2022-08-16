@@ -45,6 +45,10 @@ class LDAPModify_change(BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPModify_operation(self.operation), self.modification])
 
+    def __repr__(self) -> str:
+        attributes = [f"operation={self.operation!r}", f"modification={self.modification!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
 
 class LDAPModify_changes(BERSequence):
     value: List[LDAPModify_change]
@@ -59,6 +63,9 @@ class LDAPModify_changes(BERSequence):
 
     def to_wire(self) -> bytes:
         return self.wrap(self.value)
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
 
 
 # ModifyRequest ::= [APPLICATION 6] SEQUENCE {
@@ -91,19 +98,9 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPDN(self.object), LDAPModify_changes(self.changes)])
 
-    def __repr__(self):
-        name = self.object
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(object={}, modification={})".format(
-                repr(name),
-                repr(self.changes),
-            )
-        else:
-            return self.__class__.__name__ + "(object=%s, modification=%s, tag=%d)" % (
-                repr(name),
-                repr(self.changes),
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        attributes = [f"object={self.object}", f"changes={self.changes!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # ModifyResponse ::= [APPLICATION 7] LDAPResult

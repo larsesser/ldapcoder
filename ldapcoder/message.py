@@ -109,14 +109,11 @@ class LDAPMessage(BERSequence):
             vals.append(LDAPControls(self.controls))
         return self.wrap(vals)
 
-    def __repr__(self):
-        l = []
-        l.append("id=%r" % self.msg_id)
-        l.append("value=%r" % self.operation)
-        l.append("controls=%r" % self.controls)
-        if self.tag != self.__class__.tag:
-            l.append("tag=%d" % self.tag)
-        return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+    def __repr__(self) -> str:
+        attributes = [f"msg_id={self.msg_id}", f"operation={self.operation!r}"]
+        if self.controls is not None:
+            attributes.append(f"controls={self.controls!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # Controls ::= SEQUENCE OF control Control
@@ -141,6 +138,9 @@ class LDAPControls(BERSequence):
 
     def to_wire(self) -> bytes:
         return self.wrap(self.controls)
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(controls={self.controls!r})"
 
 
 # Control ::= SEQUENCE {
@@ -190,10 +190,13 @@ class LDAPControl(BERSequence):
             vals.append(BEROctetString(self.controlValue))
         return self.wrap(vals)
 
-    def __repr__(self):
-        criticality = str(self.criticality) if self.criticality is not None else "Default"
-        return (f"{self.__class__.__name__}(controlType={self.controlType},"
-                f" criticality={criticality}, controlValue={self.controlValue})")
+    def __repr__(self) -> str:
+        attributes = [f"controlType={self.controlType!r}"]
+        if self.criticality is not None:
+            attributes.append(f"criticality={self.criticality}")
+        if self.controlValue is not None:
+            attributes.append(f"controlValue={self.controlValue!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 class ProtocolOperationsRegistry(Registry[int, Type[LDAPProtocolOp]]):

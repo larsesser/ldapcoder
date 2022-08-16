@@ -156,6 +156,10 @@ class BERBase(metaclass=abc.ABCMeta):
     def __hash__(self):
         return hash(self.to_wire())
 
+    @abc.abstractmethod
+    def __repr__(self) -> str:
+        raise NotImplementedError
+
     @classmethod
     @abc.abstractmethod
     def from_wire(cls, content: bytes) -> "BERBase":
@@ -203,14 +207,8 @@ class BERInteger(BERBase):
         encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%r)" % self.value
-        else:
-            return self.__class__.__name__ + "(value=%r, tag=%d)" % (
-                self.value,
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value})"
 
 
 class BEROctetString(BERBase):
@@ -230,15 +228,8 @@ class BEROctetString(BERBase):
     def to_wire(self):
         return bytes((self.tag,)) + int2berlen(len(self.value)) + self.value
 
-    def __repr__(self):
-        value = self.value
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%s)" % repr(value)
-        else:
-            return self.__class__.__name__ + "(value=%s, tag=%d)" % (
-                repr(value),
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
 
 
 class BERNull(BERBase):
@@ -257,11 +248,8 @@ class BERNull(BERBase):
     def to_wire(self):
         return bytes((self.tag,)) + bytes((0,))
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "()"
-        else:
-            return self.__class__.__name__ + "(tag=%d)" % self.tag
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + "()"
 
 
 class BERBoolean(BERBase):
@@ -285,14 +273,8 @@ class BERBoolean(BERBase):
         value = 0xFF if self.value else 0x00
         return bytes((self.tag,)) + int2berlen(1) + bytes((value,))
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%d)" % self.value
-        else:
-            return self.__class__.__name__ + "(value=%d, tag=%d)" % (
-                self.value,
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value})"
 
 
 class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
@@ -318,14 +300,8 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
         encoded = int2ber(self.value)
         return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%r)" % self.value
-        else:
-            return self.__class__.__name__ + "(value=%r, tag=%d)" % (
-                self.value,
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
 
 
 class BERSequence(BERBase, metaclass=abc.ABCMeta):

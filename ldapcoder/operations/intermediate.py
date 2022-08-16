@@ -59,6 +59,14 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
             ret.append(LDAPIntermediateResponse_responseValue(self.responseValue))
         return self.wrap(ret)
 
+    def __repr__(self) -> str:
+        attributes = []
+        if self.responseName:
+            attributes.append(f"responseName={self.responseName!r}")
+        if self.responseValue:
+            attributes.append(f"responseValue={self.responseValue!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
 
 class IntermediateResponseRegistry(Registry[bytes, Type[LDAPIntermediateResponse]]):
     def add(self, item: Type[LDAPIntermediateResponse]) -> None:

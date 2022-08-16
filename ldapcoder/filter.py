@@ -67,6 +67,9 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
     def to_wire(self) -> bytes:
         return self.wrap(self.filters)
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.filters!r})"
+
 
 class LDAPFilter_and(LDAPFilterSet):
     _tag = 0x00
@@ -104,14 +107,8 @@ class LDAPFilter_not(LDAPFilter):
     def __init__(self, value: LDAPFilter):
         self.value = value
 
-    def __repr__(self):
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(value=%s)" % repr(self.value)
-        else:
-            return self.__class__.__name__ + "(value=%s, tag=%d)" % (
-                repr(self.value),
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
 
     def to_wire(self) -> bytes:
         value_bytes = self.value.to_wire()
@@ -192,6 +189,9 @@ class LDAP_substrings(BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap(self.value)
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value!r})"
+
 
 # SubstringFilter ::= SEQUENCE {
 #      type           AttributeDescription,
@@ -222,48 +222,27 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPAttributeDescription(self.type), LDAP_substrings(self.substrings)])
 
-    def __repr__(self):
-        tp = self.type
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(type={}, substrings={})".format(
-                repr(tp),
-                repr(self.substrings),
-            )
-        else:
-            return self.__class__.__name__ + "(type=%s, substrings=%s, tag=%d)" % (
-                repr(tp),
-                repr(self.substrings),
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        attributes = [f"type={self.type}", f"substrings={self.substrings!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
     @property
     def as_text(self) -> str:
-        initial = None
-        final = None
-        any: List[str] = []
+        initial_string = ""
+        any_string: List[str] = []
+        final_string = ""
 
-        for s in self.substrings:
-            assert s is not None
-            if isinstance(s, LDAPFilter_substrings_initial):
-                assert initial is None
-                assert not any
-                assert final is None
-                initial = s.as_text
-            elif isinstance(s, LDAPFilter_substrings_final):
-                assert final is None
-                final = s.as_text
-            elif isinstance(s, LDAPFilter_substrings_any):
-                assert final is None
-                any.append(s.as_text)
+        for string in self.substrings:
+            if isinstance(string, LDAPFilter_substrings_initial):
+                initial_string = string.as_text
+            elif isinstance(string, LDAPFilter_substrings_any):
+                any_string.append(string.as_text)
+            elif isinstance(string, LDAPFilter_substrings_final):
+                final_string = string.as_text
             else:
-                raise NotImplementedError("TODO: Filter type not supported %r" % s)
+                raise NotImplementedError(f"Filter type not supported: {string!r}")
 
-        if initial is None:
-            initial = ""
-        if final is None:
-            final = ""
-
-        return "(" + self.type + "=" + "*".join([initial] + any + [final]) + ")"
+        return "(" + self.type + "=" + "*".join([initial_string, *any_string, final_string]) + ")"
 
 
 class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
@@ -408,15 +387,16 @@ class LDAPMatchingRuleAssertion(BERSequence):
             to_send.append(LDAPMatchingRuleAssertion_dnAttributes(self.dnAttributes))
         return self.wrap(to_send)
 
-    def __repr__(self):
-        l = []
-        l.append("matchingRule=%s" % repr(self.matchingRule))
-        l.append("type=%s" % repr(self.type))
-        l.append("matchValue=%s" % repr(self.matchValue))
-        l.append("dnAttributes=%s" % repr(self.dnAttributes))
-        if self.tag != self.__class__.tag:
-            l.append("tag=%d" % self.tag)
-        return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+    def __repr__(self) -> str:
+        attributes = []
+        if self.matchingRule is not None:
+            attributes.append(f"matchingRule={self.matchingRule}")
+        if self.type is not None:
+            attributes.append(f"type={self.type}")
+        attributes.append(f"matchValue={self.matchValue!r}")
+        if self.dnAttributes is not None:
+            attributes.append(f"dnAttributes={self.dnAttributes}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):

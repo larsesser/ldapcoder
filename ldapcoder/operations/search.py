@@ -137,40 +137,13 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             LDAPAttributeSelection(self.attributes),
         ])
 
-    def __repr__(self):
-        base = self.baseObject
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + (
-                "(baseObject=%s, scope=%s, derefAliases=%s, "
-                + "sizeLimit=%s, timeLimit=%s, typesOnly=%s, "
-                "filter=%s, attributes=%s)"
-            ) % (
-                repr(base),
-                self.scope,
-                self.derefAliases,
-                self.sizeLimit,
-                self.timeLimit,
-                self.typesOnly,
-                repr(self.filter),
-                self.attributes,
-            )
-
-        else:
-            return self.__class__.__name__ + (
-                "(baseObject=%s, scope=%s, derefAliases=%s, "
-                + "sizeLimit=%s, timeLimit=%s, typesOnly=%s, "
-                "filter=%s, attributes=%s, tag=%d)"
-            ) % (
-                repr(base),
-                self.scope,
-                self.derefAliases,
-                self.sizeLimit,
-                self.timeLimit,
-                self.typesOnly,
-                repr(self.filter),
-                self.attributes,
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        attributes = [
+            f"baseObject={self.baseObject}", f"scope={self.scope!r}",
+            f"derefAliases={self.derefAliases!r}", f"sizeLimit={self.sizeLimit}",
+            f"timeLimit={self.timeLimit}", f"typesOnly={self.typesOnly}",
+            f"filter={self.filter!r}", f"attributes={self.attributes}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # SearchResultEntry ::= [APPLICATION 4] SEQUENCE {
@@ -199,15 +172,9 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
         return self.wrap([
             LDAPDN(self.objectName), LDAPPartialAttributeList(self.attributes)])
 
-    def __repr__(self):
-        name = self.objectName
-        attributes = [(key, [v for v in value]) for (key, value) in self.attributes]
-        return "{}(objectName={}, attributes={}{})".format(
-            self.__class__.__name__,
-            repr(name),
-            repr(attributes),
-            f", tag={self.tag}" if self.tag != self.__class__.tag else "",
-        )
+    def __repr__(self) -> str:
+        attributes = [f"objectName={self.objectName}", f"attributes={self.attributes!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # SearchResultReference ::= [APPLICATION 19] SEQUENCE
@@ -229,6 +196,9 @@ class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
 
     def to_wire(self) -> bytes:
         return self.wrap([LDAPURI(uri) for uri in self.value])
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value})"
 
 
 # SearchResultDone ::= [APPLICATION 5] LDAPResult

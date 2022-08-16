@@ -33,19 +33,9 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPDN(self.entry), LDAPAttributeList(self.attributes)])
 
-    def __repr__(self):
-        entry = self.entry
-        if self.tag == self.__class__.tag:
-            return self.__class__.__name__ + "(entry={}, attributes={})".format(
-                repr(entry),
-                repr(self.attributes),
-            )
-        else:
-            return self.__class__.__name__ + "(entry=%s, attributes=%s, tag=%d)" % (
-                repr(entry),
-                repr(self.attributes),
-                self.tag,
-            )
+    def __repr__(self) -> str:
+        attributes = [f"entry={self.entry}", f"attributes={self.attributes!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # AddResponse ::= [APPLICATION 9] LDAPResult

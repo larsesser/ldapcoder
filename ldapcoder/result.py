@@ -28,6 +28,9 @@ class LDAPReferral(BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPURI(uri) for uri in self.value])
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(value={self.value}"
+
 
 @enum.unique
 class ResultCodes(enum.IntEnum):
@@ -199,15 +202,9 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
             ret.append(LDAPReferral(self.referral))
         return self.wrap(ret)
 
-    def __repr__(self):
-        l = []
-        l.append("resultCode=%r" % self.resultCode)
-        if self.matchedDN:
-            l.append("matchedDN=%r" % self.matchedDN)
-        if self.diagnosticMessage:
-            l.append("diagnosticMessage=%r" % self.diagnosticMessage)
+    def __repr__(self) -> str:
+        attributes = [f"resultCode={self.resultCode!r}", f"matchedDN={self.matchedDN}",
+                      f"diagnosticMessage={self.diagnosticMessage}"]
         if self.referral:
-            l.append("referral=%r" % self.referral)
-        if self.tag != self.__class__.tag:
-            l.append("tag=%d" % self.tag)
-        return self.__class__.__name__ + "(" + ", ".join(l) + ")"
+            attributes.append(f"referral={self.referral}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"

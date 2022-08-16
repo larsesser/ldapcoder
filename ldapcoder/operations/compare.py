@@ -32,12 +32,9 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
     def to_wire(self) -> bytes:
         return self.wrap([LDAPDN(self.entry), self.ava])
 
-    def __repr__(self):
-        l = [
-            f"entry={repr(self.entry)}",
-            f"ava={repr(self.ava)}",
-        ]
-        return "{}({})".format(self.__class__.__name__, ", ".join(l))
+    def __repr__(self) -> str:
+        attributes = [f"entry={self.entry}", f"ava={self.ava!r}"]
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 # CompareResponse ::= [APPLICATION 15] LDAPResult

@@ -50,6 +50,12 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
             ret.append(LDAPExtendedRequest_requestValue(self.requestValue))
         return self.wrap(ret)
 
+    def __repr__(self) -> str:
+        attributes = [f"requestName={self.requestName!r}"]
+        if self.requestValue:
+            attributes.append(f"requestValue={self.requestValue!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
 
 class ExtendedRequestRegistry(Registry[bytes, Type[LDAPExtendedRequest]]):
     def add(self, item: Type[LDAPExtendedRequest]) -> None:
@@ -147,6 +153,17 @@ class LDAPExtendedResponse(LDAPResult):
         if self.responseValue is not None:
             ret.append(LDAPExtendedResponse_requestValue(self.responseValue))
         return self.wrap(ret)
+
+    def __repr__(self) -> str:
+        attributes = [f"resultCode={self.resultCode!r}", f"matchedDN={self.matchedDN}",
+                      f"diagnosticMessage={self.diagnosticMessage}"]
+        if self.referral:
+            attributes.append(f"referral={self.referral}")
+        if self.responseName:
+            attributes.append(f"responseName={self.responseName!r}")
+        if self.responseValue:
+            attributes.append(f"responseValue={self.responseValue!r}")
+        return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
 class ExtendedResponseRegistry(Registry[bytes, Type[LDAPExtendedResponse]]):
