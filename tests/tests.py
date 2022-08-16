@@ -11,8 +11,8 @@ import unittest
 from typing import Type
 
 from ldapcoder.berutils import (
-    BERBoolean, BEREnumerated, BERInteger, BERNull, BEROctetString, ber_decode_length,
-    ber_unwrap,
+    BERBoolean, BEREnumerated, BERInteger, BERNull, BEROctetString, TagClasses,
+    ber_decode_length, ber_unwrap,
 )
 from ldapcoder.filter import (
     LDAPFilter_and, LDAPFilter_approxMatch, LDAPFilter_equalityMatch,
@@ -22,9 +22,9 @@ from ldapcoder.filter import (
     LDAPFilter_substrings_initial,
 )
 from ldapcoder.ldaputils import (
-    LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
+    LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute, LDAPProtocolOp,
 )
-from ldapcoder.message import LDAPControl, LDAPMessage
+from ldapcoder.message import PROTOCOL_OPERATIONS, LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
 from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
 from ldapcoder.operations.bind import LDAPBindRequest, LDAPBindResponse
@@ -59,6 +59,13 @@ class MyTests(unittest.TestCase):
         tag, content = first_level[0]
         self.assertEqual(expected_tag, tag)
         return content
+
+    def test_registries(self):
+        @PROTOCOL_OPERATIONS
+        class SampleOperation(BERNull, LDAPProtocolOp):
+            _tag_class = TagClasses.PRIVATE
+            _tag = 0x00
+        self.assertIn(SampleOperation.tag, PROTOCOL_OPERATIONS)
 
     def test_BERLength(self):
         """All cases encode a length of 10."""

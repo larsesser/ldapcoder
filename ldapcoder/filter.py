@@ -9,7 +9,7 @@ from ldapcoder.berutils import (
 )
 from ldapcoder.ldaputils import (
     LDAPAssertionValue, LDAPAttributeDescription, LDAPAttributeValueAssertion,
-    LDAPString, check, decode, escape,
+    LDAPString, Registry, check, decode, escape,
 )
 
 
@@ -435,7 +435,14 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
         )
 
 
-FILTERS: Mapping[int, Type[LDAPFilter]] = {
+class FilterRegistry(Registry[int, Type[LDAPFilter]]):
+    def add(self, item: Type[LDAPFilter]) -> None:
+        if item.tag in self._items:
+            raise RuntimeError
+        self._items[item.tag] = item
+
+
+FILTERS = FilterRegistry({
     LDAPFilter_and.tag: LDAPFilter_and,
     LDAPFilter_or.tag: LDAPFilter_or,
     LDAPFilter_not.tag: LDAPFilter_not,
@@ -446,4 +453,4 @@ FILTERS: Mapping[int, Type[LDAPFilter]] = {
     LDAPFilter_present.tag: LDAPFilter_present,
     LDAPFilter_approxMatch.tag: LDAPFilter_approxMatch,
     LDAPFilter_extensibleMatch.tag: LDAPFilter_extensibleMatch,
-}
+})

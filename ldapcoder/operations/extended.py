@@ -1,12 +1,12 @@
 """LDAP protocol message conversion; no application logic here."""
 
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from ldapcoder.berutils import (
     BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, check, decode,
+    LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, Registry, check, decode,
 )
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
@@ -49,6 +49,16 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
         if self.requestValue is not None:
             ret.append(LDAPExtendedRequest_requestValue(self.requestValue))
         return self.wrap(ret)
+
+
+class ExtendedRequestRegistry(Registry[bytes, Type[LDAPExtendedRequest]]):
+    def add(self, item: Type[LDAPExtendedRequest]) -> None:
+        if item.requestName in self._items:
+            raise RuntimeError
+        self._items[item.requestName] = item
+
+
+EXTENDED_REQUESTS = ExtendedRequestRegistry({})
 
 
 class LDAPExtendedResponse_requestName(LDAPOID):
@@ -137,3 +147,15 @@ class LDAPExtendedResponse(LDAPResult):
         if self.responseValue is not None:
             ret.append(LDAPExtendedResponse_requestValue(self.responseValue))
         return self.wrap(ret)
+
+
+class ExtendedResponseRegistry(Registry[bytes, Type[LDAPExtendedResponse]]):
+    def add(self, item: Type[LDAPExtendedResponse]) -> None:
+        if item.responseName in self._items:
+            raise RuntimeError
+        if item.responseName is None:
+            raise RuntimeError
+        self._items[item.responseName] = item
+
+
+EXTENDED_RESPONSES = ExtendedResponseRegistry({})

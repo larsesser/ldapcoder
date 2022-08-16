@@ -1,19 +1,21 @@
 """LDAP protocol message conversion; no application logic here."""
-
-from typing import List, Mapping, Optional, Type
+from typing import List, Optional, Type
 
 from ldapcoder.berutils import (
     BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
 from ldapcoder.ldaputils import (
-    LDAPOID, LDAPMessageId, LDAPProtocolOp, alloc_ldap_message_id, check, decode,
+    LDAPOID, LDAPMessageId, LDAPProtocolOp, Registry, alloc_ldap_message_id, check,
+    decode,
 )
 from ldapcoder.operations.abandon import LDAPAbandonRequest
 from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
 from ldapcoder.operations.bind import LDAPBindRequest, LDAPBindResponse
 from ldapcoder.operations.compare import LDAPCompareRequest, LDAPCompareResponse
 from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
-from ldapcoder.operations.extended import LDAPExtendedRequest, LDAPExtendedResponse
+from ldapcoder.operations.extended import (
+    EXTENDED_REQUESTS, EXTENDED_RESPONSES, LDAPExtendedRequest, LDAPExtendedResponse,
+)
 from ldapcoder.operations.intermediate import LDAPIntermediateResponse
 from ldapcoder.operations.modify import LDAPModifyRequest, LDAPModifyResponse
 from ldapcoder.operations.modify_dn import LDAPModifyDNRequest, LDAPModifyDNResponse
@@ -70,6 +72,14 @@ class LDAPMessage(BERSequence):
         if operation_tag not in PROTOCOL_OPERATIONS:
             raise UnknownBERTag(operation_tag)
         operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
+        # use special Extended* classes if available
+        if (isinstance(operation, LDAPExtendedRequest)
+                and operation.requestName in EXTENDED_REQUESTS):
+            operation = EXTENDED_REQUESTS[operation.requestName].from_wire(operation_content)
+        elif (isinstance(operation, LDAPExtendedResponse)
+                and operation.responseName is not None
+                and operation.responseName in EXTENDED_RESPONSES):
+            operation = EXTENDED_RESPONSES[operation.responseName].from_wire(operation_content)
         assert isinstance(operation, LDAPProtocolOp)
 
         controls = None
@@ -111,7 +121,12 @@ class LDAPControls(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPControls":
         vals = cls.unwrap(content)
-        controls = [decode(val, LDAPControl) for val in vals]
+        controls: List[LDAPControl] = []
+        for val in vals:
+            control = decode(val, LDAPControl)
+            if control.controlType in CONTROLS:
+                control = decode(val, CONTROLS[control.controlType])
+            controls.append(control)
         return cls(controls)
 
     def __init__(self, controls: List["LDAPControl"]):
@@ -174,7 +189,14 @@ class LDAPControl(BERSequence):
                 f" criticality={criticality}, controlValue={self.controlValue})")
 
 
-PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
+class ProtocolOperationsRegistry(Registry[int, Type[LDAPProtocolOp]]):
+    def add(self, item: Type[LDAPProtocolOp]) -> None:
+        if item.tag in self._items:
+            raise RuntimeError
+        self._items[item.tag] = item
+
+
+PROTOCOL_OPERATIONS = ProtocolOperationsRegistry({
     LDAPBindResponse.tag: LDAPBindResponse,
     LDAPBindRequest.tag: LDAPBindRequest,
     LDAPUnbindRequest.tag: LDAPUnbindRequest,
@@ -197,4 +219,14 @@ PROTOCOL_OPERATIONS: Mapping[int, Type[LDAPProtocolOp]] = {
     LDAPCompareResponse.tag: LDAPCompareResponse,
     # ...
     LDAPIntermediateResponse.tag: LDAPIntermediateResponse,
-}
+})
+
+
+class ControlsRegistry(Registry[bytes, Type[LDAPControl]]):
+    def add(self, item: Type[LDAPControl]) -> None:
+        if item.controlType in self._items:
+            raise RuntimeError
+        self._items[item.controlType] = item
+
+
+CONTROLS = ControlsRegistry({})
