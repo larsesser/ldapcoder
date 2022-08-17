@@ -11,15 +11,6 @@ from ldapcoder.berutils import (
 if TYPE_CHECKING:
     from ldapcoder.result import ResultCodes
 
-next_ldap_message_id = 1
-
-
-def alloc_ldap_message_id() -> int:
-    global next_ldap_message_id
-    r = next_ldap_message_id
-    next_ldap_message_id = next_ldap_message_id + 1
-    return r
-
 
 def escape(s: str) -> str:
     s = s.replace("\\", r"\5c")

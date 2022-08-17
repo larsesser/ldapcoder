@@ -5,8 +5,7 @@ from ldapcoder.berutils import (
     BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
 from ldapcoder.ldaputils import (
-    LDAPOID, LDAPMessageId, LDAPProtocolOp, Registry, alloc_ldap_message_id, check,
-    decode,
+    LDAPOID, LDAPMessageId, LDAPProtocolOp, Registry, check, decode,
 )
 from ldapcoder.operations.abandon import LDAPAbandonRequest
 from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
@@ -96,9 +95,7 @@ class LDAPMessage(BERSequence):
         r = cls(msg_id=msg_id, operation=operation, controls=controls)
         return r
 
-    def __init__(self, operation: "LDAPProtocolOp", controls: List["LDAPControl"] = None, msg_id: int = None):
-        if msg_id is None:
-            msg_id = alloc_ldap_message_id()
+    def __init__(self, msg_id: int, operation: "LDAPProtocolOp", controls: List["LDAPControl"] = None):
         self.msg_id = msg_id
         self.operation = operation
         self.controls = controls
