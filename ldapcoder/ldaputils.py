@@ -99,6 +99,36 @@ class LDAPString(BEROctetString):
 
 
 # LDAPDN ::= LDAPString  -- Constrained to <distinguishedName> [RFC4514]
+#
+# distinguishedName = [ relativeDistinguishedName *( COMMA relativeDistinguishedName ) ]
+# relativeDistinguishedName = attributeTypeAndValue *( PLUS attributeTypeAndValue )
+# attributeTypeAndValue = attributeType EQUALS attributeValue
+# attributeType = descr / numericoid
+# attributeValue = string / hexstring
+#
+# ; The following characters are to be escaped when they appear
+# ; in the value to be encoded: ESC, one of <escaped>, leading
+# ; SHARP or SPACE, trailing SPACE, and NULL.
+# string =   [ ( leadchar / pair ) [ *( stringchar / pair )
+#   ( trailchar / pair ) ] ]
+#
+# leadchar = LUTF1 / UTFMB
+# LUTF1 = %x01-1F / %x21 / %x24-2A / %x2D-3A /
+#   %x3D / %x3F-5B / %x5D-7F
+#
+# trailchar  = TUTF1 / UTFMB
+# TUTF1 = %x01-1F / %x21 / %x23-2A / %x2D-3A /
+#    %x3D / %x3F-5B / %x5D-7F
+#
+# stringchar = SUTF1 / UTFMB
+# SUTF1 = %x01-21 / %x23-2A / %x2D-3A /
+#   %x3D / %x3F-5B / %x5D-7F
+#
+# pair = ESC ( ESC / special / hexpair )
+# special = escaped / SPACE / SHARP / EQUALS
+# escaped = DQUOTE / PLUS / COMMA / SEMI / LANGLE / RANGLE
+# hexstring = SHARP 1*hexpair
+# hexpair = HEX HEX
 class LDAPDN(LDAPString):
     pass
 
@@ -170,6 +200,10 @@ class LDAPException(Exception):
 # AttributeDescription ::= LDAPString
 #           -- Constrained to <attributedescription>
 #           -- [RFC4512]
+# attributedescription = attributetype options
+# attributetype = oid
+# options = *( SEMI option )
+# option = 1*keychar
 class LDAPAttributeDescription(LDAPString):
     pass
 
@@ -235,6 +269,8 @@ class LDAPAttributeValueSet(BERSet):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeValueSet":
         value = [decode(val, LDAPAttributeValue).value for val in cls.unwrap(content)]
+        # All Attributes need to be unique
+        check(len(value) == len(set(value)))
         return cls(value)
 
     def __init__(self, value: List[bytes]):

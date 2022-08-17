@@ -179,9 +179,15 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
     def __init__(self, resultCode: ResultCodes, matchedDN: str, diagnosticMessage: str,
                  referral: List[str] = None):
+        if resultCode is resultCode.referral:
+            # the referral result code is set iff there are referrals
+            check(referral is not None)
         self.resultCode = resultCode
         self.matchedDN = matchedDN
         self.diagnosticMessage = diagnosticMessage
+        if referral is not None:
+            # the referral result code is set iff there are referrals
+            check(resultCode is resultCode.referral)
         self.referral = referral
 
     def to_wire(self) -> bytes:
