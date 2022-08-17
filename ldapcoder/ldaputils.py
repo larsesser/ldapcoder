@@ -80,14 +80,9 @@ class Registry(Generic[KT, VT]):
     def __contains__(self, item: KT) -> bool:
         return item in self._items
 
-    def __call__(self, item: VT) -> VT:
-        """Enables the storage object to be used as decorator on the item definition."""
-        # TODO nicer error message if item is not of expected type
-        self.add(item)
-        return item
-
     @abc.abstractmethod
-    def add(self, item: VT) -> None:
+    def add(self, item: VT) -> VT:
+        """Add a new item to the storage. May also be used as decorator around class definition."""
         raise NotImplementedError
 
 

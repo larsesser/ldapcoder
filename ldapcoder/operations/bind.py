@@ -106,10 +106,11 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
 
 class AuthenticationChoiceRegistry(Registry[int, Type[LDAPAuthenticationChoice]]):
-    def add(self, item: Type[LDAPAuthenticationChoice]) -> None:
+    def add(self, item: Type[LDAPAuthenticationChoice]) -> Type[LDAPAuthenticationChoice]:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
+        return item
 
 
 AUTHENTICATION_CHOICES = AuthenticationChoiceRegistry({

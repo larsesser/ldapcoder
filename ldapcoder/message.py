@@ -200,10 +200,11 @@ class LDAPControl(BERSequence):
 
 
 class ProtocolOperationsRegistry(Registry[int, Type[LDAPProtocolOp]]):
-    def add(self, item: Type[LDAPProtocolOp]) -> None:
+    def add(self, item: Type[LDAPProtocolOp]) -> Type[LDAPProtocolOp]:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
+        return item
 
 
 PROTOCOL_OPERATIONS = ProtocolOperationsRegistry({
@@ -233,10 +234,11 @@ PROTOCOL_OPERATIONS = ProtocolOperationsRegistry({
 
 
 class ControlsRegistry(Registry[bytes, Type[LDAPControl]]):
-    def add(self, item: Type[LDAPControl]) -> None:
+    def add(self, item: Type[LDAPControl]) -> Type[LDAPControl]:
         if item.controlType in self._items:
             raise RuntimeError
         self._items[item.controlType] = item
+        return item
 
 
 CONTROLS = ControlsRegistry({})

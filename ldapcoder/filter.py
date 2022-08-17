@@ -416,10 +416,11 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
 
 
 class FilterRegistry(Registry[int, Type[LDAPFilter]]):
-    def add(self, item: Type[LDAPFilter]) -> None:
+    def add(self, item: Type[LDAPFilter]) -> Type[LDAPFilter]:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
+        return item
 
 
 FILTERS = FilterRegistry({

@@ -69,12 +69,13 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
 
 
 class IntermediateResponseRegistry(Registry[bytes, Type[LDAPIntermediateResponse]]):
-    def add(self, item: Type[LDAPIntermediateResponse]) -> None:
+    def add(self, item: Type[LDAPIntermediateResponse]) -> Type[LDAPIntermediateResponse]:
         if item.responseName in self._items:
             raise RuntimeError
         if item.responseName is None:
             raise RuntimeError
         self._items[item.responseName] = item
+        return item
 
 
 INTERMEDIATE_RESPONSES = IntermediateResponseRegistry({})

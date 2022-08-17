@@ -58,10 +58,11 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
 
 
 class ExtendedRequestRegistry(Registry[bytes, Type[LDAPExtendedRequest]]):
-    def add(self, item: Type[LDAPExtendedRequest]) -> None:
+    def add(self, item: Type[LDAPExtendedRequest]) -> Type[LDAPExtendedRequest]:
         if item.requestName in self._items:
             raise RuntimeError
         self._items[item.requestName] = item
+        return item
 
 
 EXTENDED_REQUESTS = ExtendedRequestRegistry({})
@@ -167,12 +168,13 @@ class LDAPExtendedResponse(LDAPResult):
 
 
 class ExtendedResponseRegistry(Registry[bytes, Type[LDAPExtendedResponse]]):
-    def add(self, item: Type[LDAPExtendedResponse]) -> None:
+    def add(self, item: Type[LDAPExtendedResponse]) -> Type[LDAPExtendedResponse]:
         if item.responseName in self._items:
             raise RuntimeError
         if item.responseName is None:
             raise RuntimeError
         self._items[item.responseName] = item
+        return item
 
 
 EXTENDED_RESPONSES = ExtendedResponseRegistry({})

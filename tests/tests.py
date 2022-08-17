@@ -66,7 +66,7 @@ class MyTests(unittest.TestCase):
         return content
 
     def test_registries(self) -> None:
-        @PROTOCOL_OPERATIONS
+        @PROTOCOL_OPERATIONS.add
         class SampleOperation(BERNull, LDAPProtocolOp):
             _tag_class = TagClasses.PRIVATE
             _tag = 0x00
