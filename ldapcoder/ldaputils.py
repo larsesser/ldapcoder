@@ -114,6 +114,27 @@ class LDAPURI(LDAPString):
     pass
 
 
+# LDAPOID ::= OCTET STRING -- Constrained to <numericoid>
+#            -- [RFC4512]
+# numericoid = number 1*( DOT number )
+class LDAPOID(BEROctetString):
+    value: str  # type: ignore[assignment]
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPOID":
+        check(len(content) >= 0)
+        return cls(content.decode("utf-8"))
+
+    def __init__(self, value: str):
+        # validate the given value to be a numericoid
+        check(all(components.isnumeric() for components in value.split(".")))
+        super().__init__(value)  # type: ignore[arg-type]
+
+    def to_wire(self) -> bytes:
+        encoded = self.value.encode("utf-8")
+        return bytes((self.tag,)) + int2berlen(len(self.value)) + encoded
+
+
 # AttributeValue ::= OCTET STRING
 class LDAPAttributeValue(BEROctetString):
     pass
@@ -300,9 +321,3 @@ class LDAPAttributeList(BERSequence):
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.value!r}"
-
-
-# LDAPOID ::= OCTET STRING -- Constrained to <numericoid>
-#            -- [RFC4512]
-class LDAPOID(BEROctetString):
-    pass

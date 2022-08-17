@@ -145,7 +145,7 @@ class LDAPControls(BERSequence):
 #      criticality             BOOLEAN DEFAULT FALSE,
 #      controlValue            OCTET STRING OPTIONAL }
 class LDAPControl(BERSequence):
-    controlType: bytes
+    controlType: str
     criticality: Optional[bool]
     controlValue: Optional[bytes]
 
@@ -173,7 +173,7 @@ class LDAPControl(BERSequence):
         return cls(controlType=controlType, criticality=criticality, controlValue=controlValue)
 
     def __init__(
-        self, controlType: bytes, criticality: bool = None, controlValue: bytes = None
+        self, controlType: str, criticality: bool = None, controlValue: bytes = None
     ):
         self.controlType = controlType
         self.criticality = criticality
@@ -188,7 +188,7 @@ class LDAPControl(BERSequence):
         return self.wrap(vals)
 
     def __repr__(self) -> str:
-        attributes = [f"controlType={self.controlType!r}"]
+        attributes = [f"controlType={self.controlType}"]
         if self.criticality is not None:
             attributes.append(f"criticality={self.criticality}")
         if self.controlValue is not None:
@@ -230,7 +230,7 @@ PROTOCOL_OPERATIONS = ProtocolOperationsRegistry({
 })
 
 
-class ControlsRegistry(Registry[bytes, Type[LDAPControl]]):
+class ControlsRegistry(Registry[str, Type[LDAPControl]]):
     def add(self, item: Type[LDAPControl]) -> Type[LDAPControl]:
         if item.controlType in self._items:
             raise RuntimeError

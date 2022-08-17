@@ -24,7 +24,7 @@ class LDAPIntermediateResponse_responseValue(BEROctetString):
 class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x19
-    responseName: Optional[bytes]
+    responseName: Optional[str]
     responseValue: Optional[bytes]
 
     @classmethod
@@ -47,7 +47,7 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
                 raise UnknownBERTag(unknown_tag)
         return cls(responseName=responseName, responseValue=responseValue)
 
-    def __init__(self, responseName: bytes = None, responseValue: bytes = None):
+    def __init__(self, responseName: str = None, responseValue: bytes = None):
         self.responseName = responseName
         self.responseValue = responseValue
 
@@ -68,7 +68,7 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
-class IntermediateResponseRegistry(Registry[bytes, Type[LDAPIntermediateResponse]]):
+class IntermediateResponseRegistry(Registry[str, Type[LDAPIntermediateResponse]]):
     def add(self, item: Type[LDAPIntermediateResponse]) -> Type[LDAPIntermediateResponse]:
         if item.responseName in self._items:
             raise RuntimeError

@@ -27,7 +27,7 @@ class LDAPExtendedRequest_requestValue(BEROctetString):
 class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x17
-    requestName: bytes
+    requestName: str
     requestValue: Optional[bytes]
 
     @classmethod
@@ -40,7 +40,7 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
             requestValue = decode(vals[1], LDAPExtendedRequest_requestValue).value
         return cls(requestName=requestName, requestValue=requestValue)
 
-    def __init__(self, requestName: bytes, requestValue: bytes = None):
+    def __init__(self, requestName: str, requestValue: bytes = None):
         self.requestName = requestName
         self.requestValue = requestValue
 
@@ -57,7 +57,7 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
-class ExtendedRequestRegistry(Registry[bytes, Type[LDAPExtendedRequest]]):
+class ExtendedRequestRegistry(Registry[str, Type[LDAPExtendedRequest]]):
     def add(self, item: Type[LDAPExtendedRequest]) -> Type[LDAPExtendedRequest]:
         if item.requestName in self._items:
             raise RuntimeError
@@ -85,7 +85,7 @@ class LDAPExtendedResponse_requestValue(BEROctetString):
 class LDAPExtendedResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x18
-    responseName: Optional[bytes]
+    responseName: Optional[str]
     responseValue: Optional[bytes]
 
     @classmethod
@@ -132,7 +132,7 @@ class LDAPExtendedResponse(LDAPResult):
         matchedDN: str,
         diagnosticMessage: str,
         referral: List[str] = None,
-        responseName: bytes = None,
+        responseName: str = None,
         responseValue: bytes = None,
     ):
         super().__init__(
@@ -167,7 +167,7 @@ class LDAPExtendedResponse(LDAPResult):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
-class ExtendedResponseRegistry(Registry[bytes, Type[LDAPExtendedResponse]]):
+class ExtendedResponseRegistry(Registry[str, Type[LDAPExtendedResponse]]):
     def add(self, item: Type[LDAPExtendedResponse]) -> Type[LDAPExtendedResponse]:
         if item.responseName in self._items:
             raise RuntimeError

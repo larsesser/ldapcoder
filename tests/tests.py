@@ -152,7 +152,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         operation = LDAPDelRequest("dc=example,dc=com")
-        controls = [LDAPControl(controlType=b'1.2.840.113556.1.4.805', criticality=True)]
+        controls = [LDAPControl(controlType="1.2.840.113556.1.4.805", criticality=True)]
         expectation = LDAPMessage(msg_id=5, operation=operation, controls=controls)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
