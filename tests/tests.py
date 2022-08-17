@@ -45,6 +45,9 @@ from ldapcoder.operations.search import (
 )
 from ldapcoder.operations.unbind import LDAPUnbindRequest
 from ldapcoder.result import ResultCodes
+from ldapcoder.unsolicited_notifications import (
+    LDAPExtendedResponse_NoticeOfDisconnection, LDAPUnsolicitedNotification,
+)
 
 
 def unhexlify(hexstring: str) -> bytes:
@@ -520,6 +523,32 @@ class MyTests(unittest.TestCase):
         self.assertEqual(unhexlify(case), result.to_wire())
 
     # TODO LDAPExtendedRequest, LDAPExtendedResponse
+
+    def test_LDAPUnsolicitedNotification(self) -> None:
+        case = """
+30 49 -- Begin the LDAPMessage sequence
+    02 01 00 -- The message ID (integer value 0)
+    78 44 -- Begin the extended response protocol op
+        0a 01 34 -- unavailable result code (enumerated value 52)
+        04 00 -- No matched DN (0-byte octet string)
+        04 25 54 68 65 20 44 69 72 65 -- The diagnostic message (octet string
+            63 74 6f 72 79 20 53 65 -- "The Directory Server is shutting down")
+            72 76 65 72 20 69 73 20
+            73 68 75 74 74 69 6e 67
+            20 64 6f 77 6e
+        8a 16 31 2e 33 2e 36 2e 31 2e -- The extended response OID (octet string
+            34 2e 31 2e 31 34 36 36 -- "1.3.6.1.4.1.1466.20036")
+            2e 32 30 30 33 36
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPUnsolicitedNotification.tag)
+        result = LDAPUnsolicitedNotification.from_wire(content)
+
+        expectation = LDAPUnsolicitedNotification(
+            operation=LDAPExtendedResponse_NoticeOfDisconnection(
+                resultCode=ResultCodes.unavailable,
+                diagnosticMessage="The Directory Server is shutting down"))
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
 
     def test_LDAPModifyRequest(self) -> None:
         case = """
