@@ -4,12 +4,14 @@ from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPAttributeValueAssertion, LDAPProtocolRequest, check, decode,
 )
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
 
 # CompareRequest ::= [APPLICATION 14] SEQUENCE {
 #      entry           LDAPDN,
 #      ava             AttributeValueAssertion }
+@PROTOCOL_OPERATIONS.add
 class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0E
@@ -38,6 +40,7 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
 
 
 # CompareResponse ::= [APPLICATION 15] LDAPResult
+@PROTOCOL_OPERATIONS.add
 class LDAPCompareResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0F

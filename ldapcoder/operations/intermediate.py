@@ -1,11 +1,12 @@
 """LDAP protocol message conversion; no application logic here."""
 
-from typing import List, Optional, Type
+from typing import List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
-from ldapcoder.ldaputils import LDAPOID, LDAPProtocolResponse, Registry, check
+from ldapcoder.ldaputils import LDAPOID, LDAPProtocolResponse, check
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 
 
 class LDAPIntermediateResponse_responseName(LDAPOID):
@@ -21,6 +22,7 @@ class LDAPIntermediateResponse_responseValue(BEROctetString):
 # IntermediateResponse ::= [APPLICATION 25] SEQUENCE {
 #         responseName     [0] LDAPOID OPTIONAL,
 #         responseValue    [1] OCTET STRING OPTIONAL }
+@PROTOCOL_OPERATIONS.add
 class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x19
@@ -66,16 +68,3 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
         if self.responseValue:
             attributes.append(f"responseValue={self.responseValue!r}")
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
-
-
-class IntermediateResponseRegistry(Registry[str, Type[LDAPIntermediateResponse]]):
-    def add(self, item: Type[LDAPIntermediateResponse]) -> Type[LDAPIntermediateResponse]:
-        if item.responseName in self._items:
-            raise RuntimeError
-        if item.responseName is None:
-            raise RuntimeError
-        self._items[item.responseName] = item
-        return item
-
-
-INTERMEDIATE_RESPONSES = IntermediateResponseRegistry({})

@@ -1,30 +1,16 @@
 """LDAP protocol message conversion; no application logic here."""
-from typing import List, Optional, Type
+from typing import List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
-from ldapcoder.ldaputils import (
-    LDAPOID, LDAPMessageId, LDAPProtocolOp, Registry, check, decode,
+from ldapcoder.ldaputils import LDAPOID, LDAPMessageId, LDAPProtocolOp, check, decode
+from ldapcoder.operations.extended import LDAPExtendedRequest, LDAPExtendedResponse
+from ldapcoder.operations.intermediate import LDAPIntermediateResponse
+from ldapcoder.registry import (
+    CONTROLS, EXTENDED_REQUESTS, EXTENDED_RESPONSES, INTERMEDIATE_RESPONSES,
+    PROTOCOL_OPERATIONS,
 )
-from ldapcoder.operations.abandon import LDAPAbandonRequest
-from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
-from ldapcoder.operations.bind import LDAPBindRequest, LDAPBindResponse
-from ldapcoder.operations.compare import LDAPCompareRequest, LDAPCompareResponse
-from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
-from ldapcoder.operations.extended import (
-    EXTENDED_REQUESTS, EXTENDED_RESPONSES, LDAPExtendedRequest, LDAPExtendedResponse,
-)
-from ldapcoder.operations.intermediate import (
-    INTERMEDIATE_RESPONSES, LDAPIntermediateResponse,
-)
-from ldapcoder.operations.modify import LDAPModifyRequest, LDAPModifyResponse
-from ldapcoder.operations.modify_dn import LDAPModifyDNRequest, LDAPModifyDNResponse
-from ldapcoder.operations.search import (
-    LDAPSearchRequest, LDAPSearchResultDone, LDAPSearchResultEntry,
-    LDAPSearchResultReference,
-)
-from ldapcoder.operations.unbind import LDAPUnbindRequest
 
 
 # LDAPMessage ::= SEQUENCE {
@@ -194,48 +180,3 @@ class LDAPControl(BERSequence):
         if self.controlValue is not None:
             attributes.append(f"controlValue={self.controlValue!r}")
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
-
-
-class ProtocolOperationsRegistry(Registry[int, Type[LDAPProtocolOp]]):
-    def add(self, item: Type[LDAPProtocolOp]) -> Type[LDAPProtocolOp]:
-        if item.tag in self._items:
-            raise RuntimeError
-        self._items[item.tag] = item
-        return item
-
-
-PROTOCOL_OPERATIONS = ProtocolOperationsRegistry({
-    LDAPBindResponse.tag: LDAPBindResponse,
-    LDAPBindRequest.tag: LDAPBindRequest,
-    LDAPUnbindRequest.tag: LDAPUnbindRequest,
-    LDAPSearchRequest.tag: LDAPSearchRequest,
-    LDAPSearchResultEntry.tag: LDAPSearchResultEntry,
-    LDAPSearchResultDone.tag: LDAPSearchResultDone,
-    LDAPSearchResultReference.tag: LDAPSearchResultReference,
-    LDAPModifyRequest.tag: LDAPModifyRequest,
-    LDAPModifyResponse.tag: LDAPModifyResponse,
-    LDAPAddRequest.tag: LDAPAddRequest,
-    LDAPAddResponse.tag: LDAPAddResponse,
-    LDAPDelRequest.tag: LDAPDelRequest,
-    LDAPDelResponse.tag: LDAPDelResponse,
-    LDAPExtendedRequest.tag: LDAPExtendedRequest,
-    LDAPExtendedResponse.tag: LDAPExtendedResponse,
-    LDAPModifyDNRequest.tag: LDAPModifyDNRequest,
-    LDAPModifyDNResponse.tag: LDAPModifyDNResponse,
-    LDAPAbandonRequest.tag: LDAPAbandonRequest,
-    LDAPCompareRequest.tag: LDAPCompareRequest,
-    LDAPCompareResponse.tag: LDAPCompareResponse,
-    # ...
-    LDAPIntermediateResponse.tag: LDAPIntermediateResponse,
-})
-
-
-class ControlsRegistry(Registry[str, Type[LDAPControl]]):
-    def add(self, item: Type[LDAPControl]) -> Type[LDAPControl]:
-        if item.controlType in self._items:
-            raise RuntimeError
-        self._items[item.controlType] = item
-        return item
-
-
-CONTROLS = ControlsRegistry({})

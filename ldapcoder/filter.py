@@ -1,7 +1,7 @@
 """LDAP protocol message conversion; no application logic here."""
 
 import abc
-from typing import Any, List, Optional, Type
+from typing import Any, List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BERBoolean, BERSequence, BERSet, TagClasses, UnknownBERTag, ber_unwrap,
@@ -9,8 +9,9 @@ from ldapcoder.berutils import (
 )
 from ldapcoder.ldaputils import (
     LDAPAssertionValue, LDAPAttributeDescription, LDAPAttributeValueAssertion,
-    LDAPString, Registry, check, decode, escape,
+    LDAPString, check, decode, escape,
 )
+from ldapcoder.registry import FILTERS
 
 
 # Filter ::= CHOICE {
@@ -71,6 +72,7 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
         return self.__class__.__name__ + f"(value={self.filters!r})"
 
 
+@FILTERS.add
 class LDAPFilter_and(LDAPFilterSet):
     _tag = 0x00
 
@@ -79,6 +81,7 @@ class LDAPFilter_and(LDAPFilterSet):
         return "(&" + "".join([x.as_text for x in self.filters]) + ")"
 
 
+@FILTERS.add
 class LDAPFilter_or(LDAPFilterSet):
     _tag = 0x01
 
@@ -87,6 +90,7 @@ class LDAPFilter_or(LDAPFilterSet):
         return "(|" + "".join([x.as_text for x in self.filters]) + ")"
 
 
+@FILTERS.add
 class LDAPFilter_not(LDAPFilter):
     _tag_is_constructed = True
     _tag = 0x02
@@ -119,6 +123,7 @@ class LDAPFilter_not(LDAPFilter):
         return "(!" + self.value.as_text + ")"
 
 
+@FILTERS.add
 class LDAPFilter_equalityMatch(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x03
 
@@ -200,6 +205,7 @@ class LDAP_substrings(BERSequence):
 #           any     [1] AssertionValue,
 #           final   [2] AssertionValue } -- can occur at most once
 #      }
+@FILTERS.add
 class LDAPFilter_substrings(LDAPFilter, BERSequence):
     _tag = 0x04
     type: str
@@ -245,6 +251,7 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
         return "(" + self.type + "=" + "*".join([initial_string, *any_string, final_string]) + ")"
 
 
+@FILTERS.add
 class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x05
 
@@ -259,6 +266,7 @@ class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
         )
 
 
+@FILTERS.add
 class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x06
 
@@ -273,6 +281,7 @@ class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
         )
 
 
+@FILTERS.add
 class LDAPFilter_present(LDAPFilter, LDAPAttributeDescription):
     _tag = 0x07
 
@@ -281,6 +290,7 @@ class LDAPFilter_present(LDAPFilter, LDAPAttributeDescription):
         return "(" + self.value + "=*)"
 
 
+@FILTERS.add
 class LDAPFilter_approxMatch(LDAPFilter, LDAPAttributeValueAssertion):
     _tag = 0x08
 
@@ -399,6 +409,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
+@FILTERS.add
 class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
     _tag = 0x09
 
@@ -413,25 +424,3 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
             + escape(self.matchValue.decode("utf-8"))
             + ")"
         )
-
-
-class FilterRegistry(Registry[int, Type[LDAPFilter]]):
-    def add(self, item: Type[LDAPFilter]) -> Type[LDAPFilter]:
-        if item.tag in self._items:
-            raise RuntimeError
-        self._items[item.tag] = item
-        return item
-
-
-FILTERS = FilterRegistry({
-    LDAPFilter_and.tag: LDAPFilter_and,
-    LDAPFilter_or.tag: LDAPFilter_or,
-    LDAPFilter_not.tag: LDAPFilter_not,
-    LDAPFilter_equalityMatch.tag: LDAPFilter_equalityMatch,
-    LDAPFilter_substrings.tag: LDAPFilter_substrings,
-    LDAPFilter_greaterOrEqual.tag: LDAPFilter_greaterOrEqual,
-    LDAPFilter_lessOrEqual.tag: LDAPFilter_lessOrEqual,
-    LDAPFilter_present.tag: LDAPFilter_present,
-    LDAPFilter_approxMatch.tag: LDAPFilter_approxMatch,
-    LDAPFilter_extensibleMatch.tag: LDAPFilter_extensibleMatch,
-})

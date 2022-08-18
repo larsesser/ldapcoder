@@ -6,12 +6,14 @@ from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPAttribute, LDAPAttributeList, LDAPProtocolRequest, check, decode,
 )
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
 
 # AddRequest ::= [APPLICATION 8] SEQUENCE {
 #      entry           LDAPDN,
 #      attributes      AttributeList }
+@PROTOCOL_OPERATIONS.add
 class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x08
@@ -39,6 +41,7 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
 
 
 # AddResponse ::= [APPLICATION 9] LDAPResult
+@PROTOCOL_OPERATIONS.add
 class LDAPAddResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x09

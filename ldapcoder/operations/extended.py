@@ -1,13 +1,14 @@
 """LDAP protocol message conversion; no application logic here."""
 
-from typing import List, Optional, Type
+from typing import List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, Registry, check, decode,
+    LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, check, decode,
 )
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
 
@@ -24,6 +25,7 @@ class LDAPExtendedRequest_requestValue(BEROctetString):
 # ExtendedRequest ::= [APPLICATION 23] SEQUENCE {
 #      requestName      [0] LDAPOID,
 #      requestValue     [1] OCTET STRING OPTIONAL }
+@PROTOCOL_OPERATIONS.add
 class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x17
@@ -57,17 +59,6 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
-class ExtendedRequestRegistry(Registry[str, Type[LDAPExtendedRequest]]):
-    def add(self, item: Type[LDAPExtendedRequest]) -> Type[LDAPExtendedRequest]:
-        if item.requestName in self._items:
-            raise RuntimeError
-        self._items[item.requestName] = item
-        return item
-
-
-EXTENDED_REQUESTS = ExtendedRequestRegistry({})
-
-
 class LDAPExtendedResponse_requestName(LDAPOID):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x0A
@@ -82,6 +73,7 @@ class LDAPExtendedResponse_requestValue(BEROctetString):
 #      COMPONENTS OF LDAPResult,
 #      responseName     [10] LDAPOID OPTIONAL,
 #      responseValue    [11] OCTET STRING OPTIONAL }
+@PROTOCOL_OPERATIONS.add
 class LDAPExtendedResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x18
@@ -165,16 +157,3 @@ class LDAPExtendedResponse(LDAPResult):
         if self.responseValue:
             attributes.append(f"responseValue={self.responseValue!r}")
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
-
-
-class ExtendedResponseRegistry(Registry[str, Type[LDAPExtendedResponse]]):
-    def add(self, item: Type[LDAPExtendedResponse]) -> Type[LDAPExtendedResponse]:
-        if item.responseName in self._items:
-            raise RuntimeError
-        if item.responseName is None:
-            raise RuntimeError
-        self._items[item.responseName] = item
-        return item
-
-
-EXTENDED_RESPONSES = ExtendedResponseRegistry({})

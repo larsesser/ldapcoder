@@ -6,6 +6,7 @@ from ldapcoder.berutils import BERBase, BERBoolean, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPProtocolRequest, LDAPRelativeDN, check, decode,
 )
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
 
@@ -19,6 +20,7 @@ class LDAPModifyDNResponse_newSuperior(LDAPDN):
 #      newrdn          RelativeLDAPDN,
 #      deleteoldrdn    BOOLEAN,
 #      newSuperior     [0] LDAPDN OPTIONAL }
+@PROTOCOL_OPERATIONS.add
 class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0C
@@ -62,6 +64,7 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
 
 
 # ModifyDNResponse ::= [APPLICATION 13] LDAPResult
+@PROTOCOL_OPERATIONS.add
 class LDAPModifyDNResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0D

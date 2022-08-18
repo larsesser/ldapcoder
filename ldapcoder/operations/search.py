@@ -6,11 +6,12 @@ from typing import List, Type
 from ldapcoder.berutils import (
     BERBoolean, BEREnumerated, BERInteger, BERSequence, TagClasses, UnknownBERTag,
 )
-from ldapcoder.filter import FILTERS, LDAPFilter
+from ldapcoder.filter import LDAPFilter
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPURI, LDAPAttributeSelection, LDAPPartialAttribute,
     LDAPPartialAttributeList, LDAPProtocolRequest, LDAPProtocolResponse, check, decode,
 )
+from ldapcoder.registry import FILTERS, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
 
@@ -63,6 +64,7 @@ class LDAPDerefAlias(BEREnumerated):
 #      typesOnly       BOOLEAN,
 #      filter          Filter,
 #      attributes      AttributeSelection }
+@PROTOCOL_OPERATIONS.add
 class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x03
@@ -149,6 +151,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
 # SearchResultEntry ::= [APPLICATION 4] SEQUENCE {
 #      objectName      LDAPDN,
 #      attributes      PartialAttributeList }
+@PROTOCOL_OPERATIONS.add
 class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x04
@@ -179,6 +182,7 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
 
 # SearchResultReference ::= [APPLICATION 19] SEQUENCE
 #             SIZE (1..MAX) OF uri URI
+@PROTOCOL_OPERATIONS.add
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x13
@@ -202,6 +206,7 @@ class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
 
 
 # SearchResultDone ::= [APPLICATION 5] LDAPResult
+@PROTOCOL_OPERATIONS.add
 class LDAPSearchResultDone(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x05

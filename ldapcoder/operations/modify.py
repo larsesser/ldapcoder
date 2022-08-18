@@ -7,6 +7,7 @@ from ldapcoder.berutils import BEREnumerated, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPPartialAttribute, LDAPProtocolRequest, check, decode,
 )
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
 
@@ -77,6 +78,7 @@ class LDAPModify_changes(BERSequence):
 #  replace (2),
 #  ...  },
 #           modification    PartialAttribute } }
+@PROTOCOL_OPERATIONS.add
 class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x06
@@ -104,6 +106,7 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
 
 
 # ModifyResponse ::= [APPLICATION 7] LDAPResult
+@PROTOCOL_OPERATIONS.add
 class LDAPModifyResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x07

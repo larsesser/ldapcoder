@@ -2,7 +2,8 @@ from typing import Any
 
 from ldapcoder.ldaputils import LDAPProtocolOp, check
 from ldapcoder.message import LDAPMessage
-from ldapcoder.operations.extended import EXTENDED_RESPONSES, LDAPExtendedResponse
+from ldapcoder.operations.extended import LDAPExtendedResponse
+from ldapcoder.registry import EXTENDED_RESPONSES
 from ldapcoder.result import ResultCodes
 
 

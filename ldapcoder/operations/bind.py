@@ -1,14 +1,13 @@
 """LDAP protocol message conversion; no application logic here."""
 
 import abc
-from typing import List, Optional, Type
+from typing import List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
 )
-from ldapcoder.ldaputils import (
-    LDAPDN, LDAPProtocolRequest, LDAPString, Registry, check, decode,
-)
+from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, check, decode
+from ldapcoder.registry import AUTHENTICATION_CHOICES, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
 
@@ -21,6 +20,7 @@ class LDAPAuthenticationChoice(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.CONTEXT
 
 
+@AUTHENTICATION_CHOICES.add
 class LDAPBindRequest_SimpleAuthentication(LDAPAuthenticationChoice, BEROctetString):
     _tag = 0x00
 
@@ -28,6 +28,7 @@ class LDAPBindRequest_SimpleAuthentication(LDAPAuthenticationChoice, BEROctetStr
 # SaslCredentials ::= SEQUENCE {
 #      mechanism               LDAPString,
 #      credentials             OCTET STRING OPTIONAL }
+@AUTHENTICATION_CHOICES.add
 class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
     _tag = 0x03
     mechanism: str
@@ -68,6 +69,7 @@ class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
 #      version                 INTEGER (1 ..  127),
 #      name                    LDAPDN,
 #      authentication          AuthenticationChoice }
+@PROTOCOL_OPERATIONS.add
 class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x00
@@ -105,20 +107,6 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
-class AuthenticationChoiceRegistry(Registry[int, Type[LDAPAuthenticationChoice]]):
-    def add(self, item: Type[LDAPAuthenticationChoice]) -> Type[LDAPAuthenticationChoice]:
-        if item.tag in self._items:
-            raise RuntimeError
-        self._items[item.tag] = item
-        return item
-
-
-AUTHENTICATION_CHOICES = AuthenticationChoiceRegistry({
-    LDAPBindRequest_SimpleAuthentication.tag: LDAPBindRequest_SimpleAuthentication,
-    LDAPBindRequest_SaslAuthentication.tag: LDAPBindRequest_SaslAuthentication,
-})
-
-
 class LDAPBindResponse_serverSaslCreds(BEROctetString):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x07
@@ -127,6 +115,7 @@ class LDAPBindResponse_serverSaslCreds(BEROctetString):
 # BindResponse ::= [APPLICATION 1] SEQUENCE {
 #      COMPONENTS OF LDAPResult,
 #      serverSaslCreds    [7] OCTET STRING OPTIONAL }
+@PROTOCOL_OPERATIONS.add
 class LDAPBindResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x01

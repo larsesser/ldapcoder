@@ -26,7 +26,7 @@ from ldapcoder.filter import (
 from ldapcoder.ldaputils import (
     LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute, LDAPProtocolOp,
 )
-from ldapcoder.message import PROTOCOL_OPERATIONS, LDAPControl, LDAPMessage
+from ldapcoder.message import LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
 from ldapcoder.operations.add import LDAPAddRequest, LDAPAddResponse
 from ldapcoder.operations.bind import (
@@ -44,6 +44,7 @@ from ldapcoder.operations.search import (
     LDAPSearchResultReference, SearchScopes,
 )
 from ldapcoder.operations.unbind import LDAPUnbindRequest
+from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import ResultCodes
 from ldapcoder.unsolicited_notifications import (
     LDAPExtendedResponse_NoticeOfDisconnection, LDAPUnsolicitedNotification,
