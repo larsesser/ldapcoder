@@ -14,7 +14,7 @@ class LDAPUnsolicitedNotification(LDAPMessage):
 
 
 @EXTENDED_RESPONSES.add
-class LDAPExtendedResponse_NoticeOfDisconnection(LDAPExtendedResponse):
+class LDAPNoticeOfDisconnection(LDAPExtendedResponse):
     responseName = "1.3.6.1.4.1.1466.20036"
     responseValue = None
 

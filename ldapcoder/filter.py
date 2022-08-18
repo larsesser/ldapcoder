@@ -50,6 +50,9 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
         return cls(filters)  # type: ignore[arg-type]
 
     def __init__(self, filters: List[LDAPFilter]):
+        # TODO is this behaviour changed by a follow up RFC?
+        # At least one filter element MUST be present in an 'and' or 'or' choice.
+        # check(len(filters) >= 1)
         self.filters = filters
 
     def __eq__(self, rhs: Any) -> bool:
@@ -185,10 +188,13 @@ class LDAP_substrings(BERSequence):
         return cls(value=substrings)
 
     def __init__(self, value: List[LDAPFilter_substrings_string]):
-        if sum(1 for substring in value if type(substring) is LDAPFilter_substrings_initial) > 1:
-            raise ValueError
-        if sum(1 for substring in value if type(substring) is LDAPFilter_substrings_final) > 1:
-            raise ValueError
+        # TODO
+        # There SHALL be at most one 'initial' and at most one 'final' in the
+        # 'substrings' of a SubstringFilter.
+        check(sum(1 for substring in value
+                  if isinstance(substring, LDAPFilter_substrings_initial)) <= 1)
+        check(sum(1 for substring in value
+                  if isinstance(substring, LDAPFilter_substrings_final)) <= 1)
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -412,6 +418,19 @@ class LDAPMatchingRuleAssertion(BERSequence):
 @FILTERS.add
 class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
     _tag = 0x09
+
+    def __init__(
+            self,
+            matchValue: bytes,
+            matchingRule: str = None,
+            type_: str = None,
+            dnAttributes: bool = None,
+    ):
+        # If the matchingRule field is absent, the type field MUST be
+        # present, and an equality match is performed for that type.
+        if matchingRule is None:
+            check(type_ is not None)
+        super().__init__(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
 
     @property
     def as_text(self) -> str:

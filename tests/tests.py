@@ -48,7 +48,7 @@ from ldapcoder.operations.unbind import LDAPUnbindRequest
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import ResultCodes
 from ldapcoder.unsolicited_notifications import (
-    LDAPExtendedResponse_NoticeOfDisconnection, LDAPUnsolicitedNotification,
+    LDAPNoticeOfDisconnection, LDAPUnsolicitedNotification,
 )
 
 
@@ -580,7 +580,7 @@ class MyTests(unittest.TestCase):
         result = LDAPUnsolicitedNotification.from_wire(content)
 
         expectation = LDAPUnsolicitedNotification(
-            operation=LDAPExtendedResponse_NoticeOfDisconnection(
+            operation=LDAPNoticeOfDisconnection(
                 resultCode=ResultCodes.unavailable,
                 diagnosticMessage="The Directory Server is shutting down"))
         self.assertEqual(expectation, result)

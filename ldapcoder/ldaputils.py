@@ -222,6 +222,10 @@ class LDAPAttributeValueAssertion(BERSequence):
 # AttributeSelection ::= SEQUENCE OF selector LDAPString
 #   -- The LDAPString is constrained to
 #   -- <attributeSelector> in Section 4.5.1.8
+# attributeSelector = attributedescription / selectorspecial
+# selectorspecial = noattrs / alluserattrs
+# noattrs = %x31.2E.31 ; "1.1"
+# alluserattrs = %x2A ; asterisk ("*")
 class LDAPAttributeSelection(BERSequence):
     value: List[str]
 
@@ -246,7 +250,8 @@ class LDAPAttributeValueSet(BERSet):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeValueSet":
         value = [decode(val, LDAPAttributeValue).value for val in cls.unwrap(content)]
-        # All Attributes need to be unique
+        # No two of the attribute values may be equivalent as described by
+        # Section 2.2 of [RFC4512]
         check(len(value) == len(set(value)))
         return cls(value)
 
