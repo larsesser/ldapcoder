@@ -35,6 +35,7 @@ from ldapcoder.operations.bind import (
 )
 from ldapcoder.operations.compare import LDAPCompareRequest, LDAPCompareResponse
 from ldapcoder.operations.delete import LDAPDelRequest, LDAPDelResponse
+from ldapcoder.operations.extended import LDAPStartTLSRequest, LDAPStartTLSResponse
 from ldapcoder.operations.modify import (
     LDAPModify_change, LDAPModifyRequest, LDAPModifyResponse, ModifyOperations,
 )
@@ -523,7 +524,41 @@ class MyTests(unittest.TestCase):
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
-    # TODO LDAPExtendedRequest, LDAPExtendedResponse
+    def test_LDAPStartTLSRequest(self) -> None:
+        case = """
+30 1d -- Begin the LDAPMessage sequence
+    02 01 01 -- The message ID (integer value 1)
+    77 18 -- Begin the extended request protocol op
+        80 16 31 2e 33 2e 36 2e 31 2e -- The extended request OID
+            34 2e 31 2e 31 34 36 36 -- (octet string "1.3.6.1.4.1.1466.20037"
+            2e 32 30 30 33 37       -- with type context-specific primitive zero)
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        expectation = LDAPMessage(msg_id=1, operation=LDAPStartTLSRequest())
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
+
+    def test_LDAPStartTLSResponse(self) -> None:
+        case = """
+30 24 -- Begin the LDAPMessage sequence
+    02 01 01 -- The message ID (integer value 1)
+    78 1f -- Begin the extended response protocol op
+        0a 01 00 -- success result code (enumerated value 0)
+        04 00 -- No matched DN (0-byte octet string)
+        04 00 -- No diagnostic message (0-byte octet string)
+        8a 16 31 2e 33 2e 36 2e 31 2e -- The extended response OID
+            34 2e 31 2e 31 34 36 36 -- (octet string "1.3.6.1.4.1.1466.20037"
+            2e 32 30 30 33 37       -- with type context-specific primitive zero)
+"""
+        content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
+        result = LDAPMessage.from_wire(content)
+
+        expectation = LDAPMessage(msg_id=1, operation=LDAPStartTLSResponse(
+            resultCode=ResultCodes.success, diagnosticMessage=""))
+        self.assertEqual(expectation, result)
+        self.assertEqual(unhexlify(case), result.to_wire())
 
     def test_LDAPUnsolicitedNotification(self) -> None:
         case = """

@@ -1,6 +1,6 @@
 """LDAP protocol message conversion; no application logic here."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
@@ -8,7 +8,9 @@ from ldapcoder.berutils import (
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, check, decode,
 )
-from ldapcoder.registry import PROTOCOL_OPERATIONS
+from ldapcoder.registry import (
+    EXTENDED_REQUESTS, EXTENDED_RESPONSES, PROTOCOL_OPERATIONS,
+)
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
 
@@ -157,3 +159,28 @@ class LDAPExtendedResponse(LDAPResult):
         if self.responseValue:
             attributes.append(f"responseValue={self.responseValue!r}")
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
+
+@EXTENDED_REQUESTS.add
+class LDAPStartTLSRequest(LDAPExtendedRequest):
+    requestName = "1.3.6.1.4.1.1466.20037"
+    requestValue = None
+
+    def __init__(self, **kwargs: Any):
+        super().__init__(requestName=self.requestName, requestValue=self.requestValue)
+
+
+@EXTENDED_RESPONSES.add
+class LDAPStartTLSResponse(LDAPExtendedResponse):
+    responseName = "1.3.6.1.4.1.1466.20037"
+    responseValue = None
+
+    def __init__(self, resultCode: ResultCodes, diagnosticMessage: str, **kwargs: Any):
+        super().__init__(
+            resultCode=resultCode,
+            matchedDN="",
+            diagnosticMessage=diagnosticMessage,
+            referral=None,
+            responseName=self.responseName,
+            responseValue=self.responseValue
+        )
