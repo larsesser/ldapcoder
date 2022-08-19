@@ -16,6 +16,7 @@
 #     this protocol definition.
 import abc
 import enum
+import logging
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
 from ldapcoder.exceptions import EncodingError, InsufficientDataError
@@ -34,6 +35,9 @@ from ldapcoder.exceptions import EncodingError, InsufficientDataError
 # 1xxxxxxx = len is stored in the next 0xxxxxxx octets
 # indefinite form not supported
 MULTI_BYTE_LENGTH_MASK = 0x80
+
+
+logger = logging.getLogger(__name__)
 
 
 def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
@@ -176,14 +180,12 @@ class BERInteger(BERBase):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BERInteger":
-        assert len(content) > 0
         return cls(ber2int(content))
 
     def __init__(self, value: int) -> None:
         """Create a new BERInteger object.
         value is an integer.
         """
-        assert value is not None
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -201,11 +203,9 @@ class BEROctetString(BERBase):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BEROctetString":
-        assert len(content) >= 0
         return cls(content)
 
     def __init__(self, value: bytes) -> None:
-        assert value is not None
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -225,10 +225,12 @@ class BERNull(BERBase):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BERNull":
-        assert len(content) == 0
+        if len(content) != 0:
+            logger.warning(f"Received {cls.__name__} element with content: {content!r}")
         return cls()
 
     def to_wire(self) -> bytes:
+        # BERNull objects carry no content, so their length attribute is 0
         return bytes((self.tag,)) + bytes((0,))
 
     def __repr__(self) -> str:
@@ -242,14 +244,12 @@ class BERBoolean(BERBase):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BERBoolean":
-        assert len(content) > 0
         return cls(bool(ber2int(content)))
 
     def __init__(self, value: bool) -> None:
         """Create a new BERInteger object.
         value is an integer.
         """
-        assert value is not None
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -272,11 +272,9 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BEREnumerated":
-        assert len(content) > 0
         return cls(cls.enum_cls()(ber2int(content)))
 
     def __init__(self, value: enum.IntEnum) -> None:
-        assert value is not None
         self.value = value
 
     def to_wire(self) -> bytes:
