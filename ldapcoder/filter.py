@@ -4,9 +4,9 @@ import abc
 from typing import Any, List, Optional
 
 from ldapcoder.berutils import (
-    BERBase, BERBoolean, BERSequence, BERSet, TagClasses, UnknownBERTag, ber_unwrap,
-    int2berlen,
+    BERBase, BERBoolean, BERSequence, BERSet, TagClasses, ber_unwrap, int2berlen,
 )
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import (
     LDAPAssertionValue, LDAPAttributeDescription, LDAPAttributeValueAssertion,
     LDAPString, check, decode, escape,
@@ -44,7 +44,7 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
         filters = []
         for filter_tag, filter_content in vals:
             if filter_tag not in FILTERS:
-                raise UnknownBERTag(filter_tag)
+                raise UnknownTagError(filter_tag)
             filters.append(FILTERS[filter_tag].from_wire(filter_content))
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         return cls(filters)  # type: ignore[arg-type]
@@ -106,7 +106,7 @@ class LDAPFilter_not(LDAPFilter):
 
         filter_tag, filter_content = val
         if filter_tag not in FILTERS:
-            raise UnknownBERTag(filter_tag)
+            raise UnknownTagError(filter_tag)
         value = FILTERS[filter_tag].from_wire(filter_content)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         return cls(value)  # type: ignore[arg-type]
@@ -183,7 +183,7 @@ class LDAP_substrings(BERSequence):
             elif substring_tag == LDAPFilter_substrings_final.tag:
                 substring = LDAPFilter_substrings_final.from_wire(substring_content)
             else:
-                raise UnknownBERTag(substring_tag)
+                raise UnknownTagError(substring_tag)
             substrings.append(substring)
         return cls(value=substrings)
 
@@ -375,7 +375,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
                     raise ValueError
                 dnAttributes = LDAPMatchingRuleAssertion_dnAttributes.from_wire(unknown_content).value
             else:
-                raise UnknownBERTag(unknown_tag)
+                raise UnknownTagError(unknown_tag)
 
         assert matchValue is not None
         return cls(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)

@@ -4,8 +4,9 @@ import enum
 from typing import List, Type
 
 from ldapcoder.berutils import (
-    BERBoolean, BEREnumerated, BERInteger, BERSequence, TagClasses, UnknownBERTag,
+    BERBoolean, BEREnumerated, BERInteger, BERSequence, TagClasses,
 )
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.filter import LDAPFilter
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPURI, LDAPAttributeSelection, LDAPPartialAttribute,
@@ -91,7 +92,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
         typesOnly = decode(vals[5], BERBoolean).value
         filter_tag, filter_content = vals[6]
         if filter_tag not in FILTERS:
-            raise UnknownBERTag(filter_tag)
+            raise UnknownTagError(filter_tag)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         filter_ = FILTERS[filter_tag].from_wire(filter_content)
         attributes = decode(vals[7], LDAPAttributeSelection).value

@@ -2,9 +2,8 @@
 
 from typing import Any, List, Optional
 
-from ldapcoder.berutils import (
-    BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
-)
+from ldapcoder.berutils import BERBase, BEROctetString, BERSequence, TagClasses
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, check, decode,
 )
@@ -108,7 +107,7 @@ class LDAPExtendedResponse(LDAPResult):
                     raise ValueError
                 responseValue = LDAPExtendedResponse_requestValue.from_wire(unknown_content).value
             else:
-                raise UnknownBERTag(unknown_tag)
+                raise UnknownTagError(unknown_tag)
 
         r = cls(
             resultCode=resultCode,

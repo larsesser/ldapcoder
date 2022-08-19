@@ -4,8 +4,9 @@ import abc
 from typing import List, Optional
 
 from ldapcoder.berutils import (
-    BERBase, BERInteger, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
+    BERBase, BERInteger, BEROctetString, BERSequence, TagClasses,
 )
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, check, decode
 from ldapcoder.registry import AUTHENTICATION_CHOICES, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
@@ -87,7 +88,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
 
         auth_tag, auth_content = vals[2]
         if auth_tag not in AUTHENTICATION_CHOICES:
-            raise UnknownBERTag(auth_tag)
+            raise UnknownTagError(auth_tag)
         auth = AUTHENTICATION_CHOICES[auth_tag].from_wire(auth_content)
         assert isinstance(auth, LDAPAuthenticationChoice)
 
@@ -139,7 +140,7 @@ class LDAPBindResponse(LDAPResult):
             elif unknown_tag == LDAPBindResponse_serverSaslCreds.tag:
                 serverSaslCreds = decode(vals[3], LDAPBindResponse_serverSaslCreds).value
             else:
-                raise UnknownBERTag(unknown_tag)
+                raise UnknownTagError(unknown_tag)
         elif len(vals) == 5:
             referral = decode(vals[3], LDAPReferral).value
             serverSaslCreds = decode(vals[4], LDAPBindResponse_serverSaslCreds).value

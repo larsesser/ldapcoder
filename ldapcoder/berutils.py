@@ -18,6 +18,8 @@ import abc
 import enum
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
+from ldapcoder.exceptions import InsufficientDataError
+
 # xxxxxxxx
 # |/|\.../
 # | | |
@@ -31,15 +33,6 @@ from typing import Any, Callable, List, Sequence, Tuple, Type
 # 0xxxxxxx = 0..127
 # 1xxxxxxx = len is stored in the next 0xxxxxxx octets
 # indefinite form not supported
-
-
-class UnknownBERTag(Exception):
-    def __init__(self, tag: int) -> None:
-        super().__init__()
-        self.tag = tag
-
-    def __str__(self) -> str:
-        return "Unknown tag 0x{:02x} in current context.".format(self.tag)
 
 
 def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
@@ -58,7 +51,8 @@ def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
     ll = 1
     if l & 0x80:
         ll = 1 + (l & 0x7F)
-        need(m, offset + ll)
+        if len(m) < offset + ll:
+            raise InsufficientDataError
         l = ber2int(m[offset + 1 : offset + ll], signed=False)
     return (l, ll)
 
@@ -94,7 +88,8 @@ def ber2int(e: bytes, signed: bool = True) -> int:
 
     The tag and the length of the BER object need to be handled beforehand.
     """
-    need(e, 1)
+    if len(e) < 1:
+        raise InsufficientDataError
     v = 0 + ord(e[0:1])
     if v & 0x80 and signed:
         v = v - 256
@@ -172,17 +167,6 @@ class BERBase(metaclass=abc.ABCMeta):
     def to_wire(self) -> bytes:
         """Encode the instance of this class to its binary value."""
         raise NotImplementedError
-
-
-class BERExceptionInsufficientData(Exception):
-    pass
-
-
-def need(buf: bytes, n: int) -> None:
-    """Check that the given buffer has at least n bytes left."""
-    d = n - len(buf)
-    if d > 0:
-        raise BERExceptionInsufficientData(d)
 
 
 class BERInteger(BERBase):
@@ -318,7 +302,7 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
         """Helper method to unwrap the given BERSequence into (tags, contents)."""
         vals, bytes_used = ber_unwrap(content)
         if bytes_used != len(content):
-            raise BERExceptionInsufficientData
+            raise InsufficientDataError
         return vals
 
 
@@ -341,12 +325,14 @@ def ber_unwrap(raw: bytes) -> Tuple[List[Tuple[int, bytes]], int]:
     bytes_used = 0
     while raw:
         # The first two bytes are necessary, since they decode the tag and the length
-        need(raw, 2)
+        if len(raw) < 2:
+            raise InsufficientDataError
         tag = ber2int(raw[0:1], signed=False)
         length, lenlen = ber_decode_length(raw, offset=1)
 
         # ensure all content is present
-        need(raw, 1 + lenlen + length)
+        if len(raw) < 1 + lenlen + length:
+            raise InsufficientDataError
         content = raw[1 + lenlen : 1 + lenlen + length]
         # strip the now used bytes from raw
         raw = raw[1+lenlen+length:]

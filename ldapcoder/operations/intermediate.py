@@ -2,9 +2,8 @@
 
 from typing import List, Optional
 
-from ldapcoder.berutils import (
-    BERBase, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
-)
+from ldapcoder.berutils import BERBase, BEROctetString, BERSequence, TagClasses
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import LDAPOID, LDAPProtocolResponse, check
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 
@@ -46,7 +45,7 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
                     raise ValueError
                 responseValue = LDAPIntermediateResponse_responseValue.from_wire(unkown_content).value
             else:
-                raise UnknownBERTag(unknown_tag)
+                raise UnknownTagError(unknown_tag)
         return cls(responseName=responseName, responseValue=responseValue)
 
     def __init__(self, responseName: str = None, responseValue: bytes = None):

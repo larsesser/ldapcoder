@@ -2,8 +2,9 @@
 from typing import List, Optional
 
 from ldapcoder.berutils import (
-    BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses, UnknownBERTag,
+    BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses,
 )
+from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import LDAPOID, LDAPMessageId, LDAPProtocolOp, check, decode
 from ldapcoder.operations.extended import LDAPExtendedRequest, LDAPExtendedResponse
 from ldapcoder.operations.intermediate import LDAPIntermediateResponse
@@ -57,7 +58,7 @@ class LDAPMessage(BERSequence):
 
         operation_tag, operation_content = vals[1]
         if operation_tag not in PROTOCOL_OPERATIONS:
-            raise UnknownBERTag(operation_tag)
+            raise UnknownTagError(operation_tag)
         operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
         # use special Extended* classes if available
         if (isinstance(operation, LDAPExtendedRequest)
@@ -151,7 +152,7 @@ class LDAPControl(BERSequence):
             elif unknown_tag == BEROctetString.tag:
                 controlValue = decode(vals[1], BEROctetString).value
             else:
-                raise UnknownBERTag(unknown_tag)
+                raise UnknownTagError(unknown_tag)
         elif len(vals) == 3:
             criticality = decode(vals[1], BERBoolean).value
             controlValue = decode(vals[2], BEROctetString).value
