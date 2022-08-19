@@ -4,7 +4,7 @@ import abc
 from typing import Any, List, Optional
 
 from ldapcoder.berutils import (
-    BERBase, BERBoolean, BERSequence, BERSet, TagClasses, ber_unwrap, int2berlen,
+    BERBase, BERBoolean, BERSequence, BERSet, TagClasses, ber_unwrap, berlen,
 )
 from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.ldaputils import (
@@ -119,7 +119,7 @@ class LDAPFilter_not(LDAPFilter):
 
     def to_wire(self) -> bytes:
         value_bytes = self.value.to_wire()
-        return bytes((self.tag,)) + int2berlen(len(value_bytes)) + value_bytes
+        return bytes((self.tag,)) + berlen(value_bytes) + value_bytes
 
     @property
     def as_text(self) -> str:

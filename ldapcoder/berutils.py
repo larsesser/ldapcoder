@@ -18,7 +18,7 @@ import abc
 import enum
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
-from ldapcoder.exceptions import InsufficientDataError
+from ldapcoder.exceptions import EncodingError, InsufficientDataError
 
 # xxxxxxxx
 # |/|\.../
@@ -33,6 +33,7 @@ from ldapcoder.exceptions import InsufficientDataError
 # 0xxxxxxx = 0..127
 # 1xxxxxxx = len is stored in the next 0xxxxxxx octets
 # indefinite form not supported
+MULTI_BYTE_LENGTH_MASK = 0x80
 
 
 def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
@@ -49,7 +50,7 @@ def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
     """
     l = ber2int(m[offset + 0 : offset + 1], signed=False)
     ll = 1
-    if l & 0x80:
+    if l & MULTI_BYTE_LENGTH_MASK:
         ll = 1 + (l & 0x7F)
         if len(m) < offset + ll:
             raise InsufficientDataError
@@ -57,17 +58,16 @@ def ber_decode_length(m: bytes, offset: int = 0) -> Tuple[int, int]:
     return (l, ll)
 
 
-def int2berlen(i: int) -> bytes:
-    """Calculate the length of an BER object from the length of its content"""
-    assert i >= 0
-    e = int2ber(i, signed=False)
-    if i <= 127:
-        return e
-    else:
-        l = len(e)
-        assert l > 0
-        assert l <= 127
-        return bytes((0x80 | l,)) + e
+def berlen(content: bytes) -> bytes:
+    """Calculate the length of an BER object from its content."""
+    encoded = int2ber(len(content), signed=False)
+    # Use single-byte-representation
+    if len(content) <= 127:
+        return encoded
+    # use multi-byte-representation
+    if len(encoded) > 127:
+        raise EncodingError("Object too long to be encoded.")
+    return bytes((MULTI_BYTE_LENGTH_MASK | len(encoded),)) + encoded
 
 
 def int2ber(i: int, signed: bool = True) -> bytes:
@@ -188,7 +188,7 @@ class BERInteger(BERBase):
 
     def to_wire(self) -> bytes:
         encoded = int2ber(self.value)
-        return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
+        return bytes((self.tag,)) + berlen(encoded) + encoded
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.value})"
@@ -209,7 +209,7 @@ class BEROctetString(BERBase):
         self.value = value
 
     def to_wire(self) -> bytes:
-        return bytes((self.tag,)) + int2berlen(len(self.value)) + self.value
+        return bytes((self.tag,)) + berlen(self.value) + self.value
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.value!r})"
@@ -253,8 +253,8 @@ class BERBoolean(BERBase):
         self.value = value
 
     def to_wire(self) -> bytes:
-        value = 0xFF if self.value else 0x00
-        return bytes((self.tag,)) + int2berlen(1) + bytes((value,))
+        value = bytes((0xFF,)) if self.value else bytes((0x00,))
+        return bytes((self.tag,)) + berlen(value) + value
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.value})"
@@ -281,7 +281,7 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
 
     def to_wire(self) -> bytes:
         encoded = int2ber(self.value)
-        return bytes((self.tag,)) + int2berlen(len(encoded)) + encoded
+        return bytes((self.tag,)) + berlen(encoded) + encoded
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.value!r})"
@@ -295,7 +295,7 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
     def wrap(self, content: Sequence[BERBase]) -> bytes:
         """Helper method to wrap the given BERObjects into a BERSequence."""
         vals = b"".join(x.to_wire() for x in content)
-        return bytes((self.tag,)) + int2berlen(len(vals)) + vals
+        return bytes((self.tag,)) + berlen(vals) + vals
 
     @staticmethod
     def unwrap(content: bytes) -> List[Tuple[int, bytes]]:

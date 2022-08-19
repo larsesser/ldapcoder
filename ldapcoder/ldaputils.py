@@ -5,7 +5,7 @@ import string
 from typing import TYPE_CHECKING, List, Optional, Tuple, Type, TypeVar
 
 from ldapcoder.berutils import (
-    BERBase, BERInteger, BEROctetString, BERSequence, BERSet, int2berlen,
+    BERBase, BERInteger, BEROctetString, BERSequence, BERSet, berlen,
 )
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ class LDAPString(BEROctetString):
 
     def to_wire(self) -> bytes:
         encoded = self.value.encode("utf-8")
-        return bytes((self.tag,)) + int2berlen(len(self.value)) + encoded
+        return bytes((self.tag,)) + berlen(encoded) + encoded
 
 
 # LDAPDN ::= LDAPString  -- Constrained to <distinguishedName> [RFC4514]
@@ -139,7 +139,7 @@ class LDAPOID(BEROctetString):
 
     def to_wire(self) -> bytes:
         encoded = self.value.encode("utf-8")
-        return bytes((self.tag,)) + int2berlen(len(self.value)) + encoded
+        return bytes((self.tag,)) + berlen(encoded) + encoded
 
 
 # AttributeValue ::= OCTET STRING
