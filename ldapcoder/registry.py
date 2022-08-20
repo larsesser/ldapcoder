@@ -2,7 +2,7 @@ import abc
 from typing import TYPE_CHECKING, Dict, Generic, Type, TypeVar
 
 if TYPE_CHECKING:
-    from ldapcoder.filter import LDAPFilter
+    from ldapcoder.filter import LDAPFilter, LDAPFilter_substrings_string
     from ldapcoder.ldaputils import LDAPProtocolOp
     from ldapcoder.message import LDAPControl
     from ldapcoder.operations.bind import LDAPAuthenticationChoice
@@ -74,6 +74,17 @@ class FilterRegistry(Registry[int, Type["LDAPFilter"]]):
 
 
 FILTERS = FilterRegistry()
+
+
+class SubstringRegistry(Registry[int, Type["LDAPFilter_substrings_string"]]):
+    def add(self, item: Type["LDAPFilter_substrings_string"]) -> Type["LDAPFilter_substrings_string"]:
+        if item.tag in self._items:
+            raise RuntimeError
+        self._items[item.tag] = item
+        return item
+
+
+SUBSTRINGS = SubstringRegistry()
 
 
 class ExtendedRequestRegistry(Registry[str, Type["LDAPExtendedRequest"]]):

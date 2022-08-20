@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, Type, TypeVar
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, BERSet, berlen,
 )
+from ldapcoder.exceptions import DecodingError, EncodingError
 
 if TYPE_CHECKING:
     from ldapcoder.result import ResultCodes
@@ -32,16 +33,6 @@ def smart_escape(s: str, threshold: float = 0.30) -> str:
     return escape(s)
 
 
-def check(statement: bool, msg: str = "") -> None:
-    """Check that the given statement is true.
-
-    If not, raise an error with the given message. Thought of this like assert statements,
-    with the difference that this one does actually raise exceptions.
-    """
-    if not statement:
-        raise ValueError(msg)
-
-
 T = TypeVar("T")
 
 
@@ -49,7 +40,8 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     """Decode a (tag, content) tuple into an instance of the given BER class."""
     tag, content = input_
     assert issubclass(class_, BERBase)
-    check(tag == class_.tag, msg=f"Given tag: {tag}, expected tag: {class_.tag}")
+    if tag != class_.tag:
+        raise DecodingError(f"Expected tag {class_.tag}, got {tag} instead.")
     # TODO can we show mypy that T is always a subclass of BERBase?
     return class_.from_wire(content)  # type: ignore[return-value]
 
@@ -61,8 +53,10 @@ class LDAPString(BEROctetString):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPString":
-        check(len(content) >= 0)
-        utf8 = content.decode("utf-8")
+        try:
+            utf8 = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
         # TODO should this be escaped or not?
         # value = escape(utf8)
         return cls(utf8)
@@ -71,7 +65,10 @@ class LDAPString(BEROctetString):
         super().__init__(value)  # type: ignore[arg-type]
 
     def to_wire(self) -> bytes:
-        encoded = self.value.encode("utf-8")
+        try:
+            encoded = self.value.encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise EncodingError from e
         return bytes((self.tag,)) + berlen(encoded) + encoded
 
 
@@ -129,16 +126,23 @@ class LDAPOID(BEROctetString):
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPOID":
-        check(len(content) >= 0)
-        return cls(content.decode("utf-8"))
+        try:
+            utf8 = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
+        return cls(utf8)
 
     def __init__(self, value: str):
         # validate the given value to be a numericoid
-        check(all(components.isnumeric() for components in value.split(".")))
+        if any(not components.isnumeric() for components in value.split(".")):
+            raise ValueError(f"Given value is no valid numericoid: {value}")
         super().__init__(value)  # type: ignore[arg-type]
 
     def to_wire(self) -> bytes:
-        encoded = self.value.encode("utf-8")
+        try:
+            encoded = self.value.encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise EncodingError from e
         return bytes((self.tag,)) + berlen(encoded) + encoded
 
 
@@ -200,7 +204,10 @@ class LDAPAttributeValueAssertion(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeValueAssertion":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         attributeDesc = decode(vals[0], LDAPAttributeDescription).value
         assertionValue = decode(vals[1], LDAPAssertionValue).value
         return cls(attributeDesc=attributeDesc, assertionValue=assertionValue)
@@ -250,12 +257,11 @@ class LDAPAttributeValueSet(BERSet):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeValueSet":
         value = [decode(val, LDAPAttributeValue).value for val in cls.unwrap(content)]
-        # No two of the attribute values may be equivalent as described by
-        # Section 2.2 of [RFC4512]
-        check(len(value) == len(set(value)))
         return cls(value)
 
     def __init__(self, value: List[bytes]):
+        # Note that we do not check that no two values of an attribute are equivalent.
+        # This needs more context than is present here. See [RFC4512], Section 2.2
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -275,7 +281,10 @@ class LDAPPartialAttribute(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPPartialAttribute":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         type_ = decode(vals[0], LDAPAttributeDescription).value
         values = decode(vals[1], LDAPAttributeValueSet).value
         return cls(type_=type_, values=values)
@@ -318,7 +327,8 @@ class LDAPPartialAttributeList(BERSequence):
 #      vals (SIZE(1..MAX))})
 class LDAPAttribute(LDAPPartialAttribute):
     def __init__(self, type_: str, values: List[bytes]):
-        check(len(values) >= 1)
+        if len(values) == 0:
+            raise ValueError(f"{self.__class__.__name__} takes at least one value.")
         super().__init__(type_, values)
 
 

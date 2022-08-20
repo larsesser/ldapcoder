@@ -19,7 +19,7 @@ import enum
 import logging
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
-from ldapcoder.exceptions import EncodingError, InsufficientDataError
+from ldapcoder.exceptions import DecodingError, EncodingError, InsufficientDataError
 
 # xxxxxxxx
 # |/|\.../
@@ -285,6 +285,11 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
         return self.__class__.__name__ + f"(value={self.value!r})"
 
 
+def format_vals(vals: List[Tuple[int, bytes]], offset: int = 0) -> str:
+    """Return a nice string representation of the given vals[offset:]."""
+    return str([(hex(tag), repr(content)) for tag, content in vals[offset:]])
+
+
 class BERSequence(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.UNIVERSAL
     _tag_is_constructed = True
@@ -302,6 +307,23 @@ class BERSequence(BERBase, metaclass=abc.ABCMeta):
         if bytes_used != len(content):
             raise InsufficientDataError
         return vals
+
+    @classmethod
+    def handle_additional_vals(cls, vals: List[Tuple[int, bytes]]) -> None:
+        """Log if additional sequence elements where received.
+
+        This may happen if the current implementation was extended by a later RFC. To
+        support extensibility, decoders MUST ignore trailing SEQUENCE components with
+        unknown tags. See [RFC4511], Section 4.
+        """
+        msg = f"{cls.__name__} received additional elements: {format_vals(vals)}"
+        logger.warning(msg)
+
+    @classmethod
+    def handle_missing_vals(cls, vals: List[Tuple[int, bytes]]) -> None:
+        """Raise an error if non-optional elements are missing."""
+        msg = f"{cls.__name__} misses some elements. Received: {format_vals(vals)}"
+        raise DecodingError(msg)
 
 
 class BERSet(BERSequence, metaclass=abc.ABCMeta):

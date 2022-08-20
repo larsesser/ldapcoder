@@ -4,7 +4,7 @@ from typing import List
 
 from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPAttribute, LDAPAttributeList, LDAPProtocolRequest, check, decode,
+    LDAPDN, LDAPAttribute, LDAPAttributeList, LDAPProtocolRequest, decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -23,7 +23,10 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAddRequest":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         entry = decode(vals[0], LDAPDN).value
         attributes = decode(vals[1], LDAPAttributeList).value
         return cls(entry=entry, attributes=attributes)

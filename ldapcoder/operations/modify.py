@@ -5,7 +5,7 @@ from typing import List, Type
 
 from ldapcoder.berutils import BEREnumerated, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPPartialAttribute, LDAPProtocolRequest, check, decode,
+    LDAPDN, LDAPPartialAttribute, LDAPProtocolRequest, decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -34,7 +34,10 @@ class LDAPModify_change(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPModify_change":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         operation = decode(vals[0], LDAPModify_operation).value
         modification = decode(vals[1], LDAPPartialAttribute)
         return cls(operation=operation, modification=modification)
@@ -88,7 +91,10 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPModifyRequest":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         object_ = decode(vals[0], LDAPDN).value
         changes = decode(vals[1], LDAPModify_changes).value
         return cls(object_=object_, changes=changes)

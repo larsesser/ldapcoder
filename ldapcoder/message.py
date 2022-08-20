@@ -4,8 +4,8 @@ from typing import List, Optional
 from ldapcoder.berutils import (
     BERBase, BERBoolean, BEROctetString, BERSequence, TagClasses,
 )
-from ldapcoder.exceptions import UnknownTagError
-from ldapcoder.ldaputils import LDAPOID, LDAPMessageId, LDAPProtocolOp, check, decode
+from ldapcoder.exceptions import DuplicateTagReceivedError, UnknownTagError
+from ldapcoder.ldaputils import LDAPOID, LDAPMessageId, LDAPProtocolOp, decode
 from ldapcoder.operations.extended import LDAPExtendedRequest, LDAPExtendedResponse
 from ldapcoder.operations.intermediate import LDAPIntermediateResponse
 from ldapcoder.registry import (
@@ -52,7 +52,10 @@ class LDAPMessage(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPMessage":
         vals = cls.unwrap(content)
-        check(len(vals) in {2, 3})
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 3:
+            cls.handle_additional_vals(vals[3:])
 
         msg_id = decode(vals[0], LDAPMessageId).value
 
@@ -60,10 +63,11 @@ class LDAPMessage(BERSequence):
         if operation_tag not in PROTOCOL_OPERATIONS:
             raise UnknownTagError(operation_tag)
         operation = PROTOCOL_OPERATIONS[operation_tag].from_wire(operation_content)
-        # use special Extended* classes if available
+        # use special ExtendedRequest class if available
         if (isinstance(operation, LDAPExtendedRequest)
                 and operation.requestName in EXTENDED_REQUESTS):
             operation = EXTENDED_REQUESTS[operation.requestName].from_wire(operation_content)
+        # use special ExtendedResponse class if available
         elif (isinstance(operation, LDAPExtendedResponse)
                 and operation.responseName is not None
                 and operation.responseName in EXTENDED_RESPONSES):
@@ -76,7 +80,7 @@ class LDAPMessage(BERSequence):
         assert isinstance(operation, LDAPProtocolOp)
 
         controls = None
-        if len(vals) == 3:
+        if len(vals) >= 3:
             controls = decode(vals[2], LDAPControls).controls
 
         r = cls(msg_id=msg_id, operation=operation, controls=controls)
@@ -139,23 +143,29 @@ class LDAPControl(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPControl":
         vals = cls.unwrap(content)
-        check(1 <= len(vals) <= 3)
+        if len(vals) < 1:
+            cls.handle_missing_vals(vals)
 
         controlType = decode(vals[0], LDAPOID).value
 
         criticality = None
         controlValue = None
-        if len(vals) == 2:
-            unknown_tag, _ = vals[1]
+        additional = []
+        for unknown_tag, unknown_content in vals[1:]:
             if unknown_tag == BERBoolean.tag:
-                criticality = decode(vals[1], BERBoolean).value
+                if criticality is not None:
+                    # TODO this may lead to false-positive catches
+                    raise DuplicateTagReceivedError("criticality")
+                criticality = BERBoolean.from_wire(unknown_content).value
             elif unknown_tag == BEROctetString.tag:
-                controlValue = decode(vals[1], BEROctetString).value
+                if controlValue is not None:
+                    # TODO this may lead to false-positive catches
+                    raise DuplicateTagReceivedError("controlValue")
+                controlValue = BEROctetString.from_wire(unknown_content).value
             else:
-                raise UnknownTagError(unknown_tag)
-        elif len(vals) == 3:
-            criticality = decode(vals[1], BERBoolean).value
-            controlValue = decode(vals[2], BEROctetString).value
+                additional.append((unknown_tag, unknown_content))
+        if additional:
+            cls.handle_additional_vals(additional)
 
         return cls(controlType=controlType, criticality=criticality, controlValue=controlValue)
 

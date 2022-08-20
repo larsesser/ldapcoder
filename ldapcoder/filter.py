@@ -1,17 +1,22 @@
 """LDAP protocol message conversion; no application logic here."""
 
 import abc
+import logging
 from typing import Any, List, Optional
 
 from ldapcoder.berutils import (
     BERBase, BERBoolean, BERSequence, BERSet, TagClasses, ber_unwrap, berlen,
 )
-from ldapcoder.exceptions import UnknownTagError
+from ldapcoder.exceptions import (
+    DecodingError, DuplicateTagReceivedError, UnknownTagError,
+)
 from ldapcoder.ldaputils import (
     LDAPAssertionValue, LDAPAttributeDescription, LDAPAttributeValueAssertion,
-    LDAPString, check, decode, escape,
+    LDAPString, decode, escape,
 )
-from ldapcoder.registry import FILTERS
+from ldapcoder.registry import FILTERS, SUBSTRINGS
+
+logger = logging.getLogger(__name__)
 
 
 # Filter ::= CHOICE {
@@ -102,14 +107,16 @@ class LDAPFilter_not(LDAPFilter):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPFilter_not":
         [val], bytes_used = ber_unwrap(content)
-        check(bytes_used == len(content))
+        if bytes_used != len(content):
+            raise DecodingError(f"Trailing bytes detected: {content[bytes_used:]!r}")
 
         filter_tag, filter_content = val
         if filter_tag not in FILTERS:
             raise UnknownTagError(filter_tag)
         value = FILTERS[filter_tag].from_wire(filter_content)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
-        return cls(value)  # type: ignore[arg-type]
+        assert isinstance(value, LDAPFilter)
+        return cls(value)
 
     def __init__(self, value: LDAPFilter):
         self.value = value
@@ -154,14 +161,17 @@ class LDAPFilter_substrings_string(LDAPAssertionValue):
         return escape(self.value.decode("utf-8"))
 
 
+@SUBSTRINGS.add
 class LDAPFilter_substrings_initial(LDAPFilter_substrings_string):
     _tag = 0x00
 
 
+@SUBSTRINGS.add
 class LDAPFilter_substrings_any(LDAPFilter_substrings_string):
     _tag = 0x01
 
 
+@SUBSTRINGS.add
 class LDAPFilter_substrings_final(LDAPFilter_substrings_string):
     _tag = 0x02
 
@@ -172,29 +182,23 @@ class LDAP_substrings(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "BERBase":
         vals = cls.unwrap(content)
-        check(len(vals) != 0)
-
         substrings = []
         for substring_tag, substring_content in vals:
-            if substring_tag == LDAPFilter_substrings_initial.tag:
-                substring = LDAPFilter_substrings_initial.from_wire(substring_content)
-            elif substring_tag == LDAPFilter_substrings_any.tag:
-                substring = LDAPFilter_substrings_any.from_wire(substring_content)
-            elif substring_tag == LDAPFilter_substrings_final.tag:
-                substring = LDAPFilter_substrings_final.from_wire(substring_content)
-            else:
+            if substring_tag not in SUBSTRINGS:
                 raise UnknownTagError(substring_tag)
+            substring = SUBSTRINGS[substring_tag].from_wire(substring_content)
             substrings.append(substring)
         return cls(value=substrings)
 
     def __init__(self, value: List[LDAPFilter_substrings_string]):
-        # TODO
+        if len(value) == 0:
+            raise ValueError(f"{self.__class__.__name__} expects at least one element.")
         # There SHALL be at most one 'initial' and at most one 'final' in the
         # 'substrings' of a SubstringFilter.
-        check(sum(1 for substring in value
-                  if isinstance(substring, LDAPFilter_substrings_initial)) <= 1)
-        check(sum(1 for substring in value
-                  if isinstance(substring, LDAPFilter_substrings_final)) <= 1)
+        if sum(1 for s in value if isinstance(s, LDAPFilter_substrings_initial)) > 1:
+            logger.warning("More than one initial substring detected.")
+        if sum(1 for s in value if isinstance(s, LDAPFilter_substrings_final)) > 1:
+            logger.warning("More than one final substring detected.")
         self.value = value
 
     def to_wire(self) -> bytes:
@@ -220,7 +224,10 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPFilter_substrings":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
 
         type_ = decode(vals[0], LDAPAttributeDescription).value
         substrings = decode(vals[1], LDAP_substrings).value
@@ -252,6 +259,7 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
             elif isinstance(string, LDAPFilter_substrings_final):
                 final_string = string.as_text
             else:
+                # TODO error more gracefully?
                 raise NotImplementedError(f"Filter type not supported: {string!r}")
 
         return "(" + self.type + "=" + "*".join([initial_string, *any_string, final_string]) + ")"
@@ -350,34 +358,39 @@ class LDAPMatchingRuleAssertion(BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPMatchingRuleAssertion":
         vals = cls.unwrap(content)
-        check(1 <= len(vals) <= 4)
+        if len(vals) == 0:
+            cls.handle_missing_vals(vals)
 
         matchingRule = None
         type_ = None
         matchValue = None
         dnAttributes = None
 
+        additional = []
         for unknown_tag, unknown_content in vals:
             if unknown_tag == LDAPMatchingRuleAssertion_matchingRule.tag:
                 if matchingRule is not None:
-                    raise ValueError
+                    raise DuplicateTagReceivedError("matchingRule")
                 matchingRule = LDAPMatchingRuleAssertion_matchingRule.from_wire(unknown_content).value
             elif unknown_tag == LDAPMatchingRuleAssertion_type.tag:
                 if type_ is not None:
-                    raise ValueError
+                    raise DuplicateTagReceivedError("type")
                 type_ = LDAPMatchingRuleAssertion_type.from_wire(unknown_content).value
             elif unknown_tag == LDAPMatchingRuleAssertion_matchValue.tag:
                 if matchValue is not None:
-                    raise ValueError
+                    raise DuplicateTagReceivedError("matchValue")
                 matchValue = LDAPMatchingRuleAssertion_matchValue.from_wire(unknown_content).value
             elif unknown_tag == LDAPMatchingRuleAssertion_dnAttributes.tag:
                 if dnAttributes is not None:
-                    raise ValueError
+                    raise DuplicateTagReceivedError("dnAttributes")
                 dnAttributes = LDAPMatchingRuleAssertion_dnAttributes.from_wire(unknown_content).value
             else:
-                raise UnknownTagError(unknown_tag)
+                additional.append((unknown_tag, unknown_content))
+        if additional:
+            cls.handle_additional_vals(additional)
 
-        assert matchValue is not None
+        if matchValue is None:
+            raise DecodingError("matchValue is missing.")
         return cls(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
 
     def __init__(
@@ -428,8 +441,8 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
     ):
         # If the matchingRule field is absent, the type field MUST be
         # present, and an equality match is performed for that type.
-        if matchingRule is None:
-            check(type_ is not None)
+        if matchingRule is None and type_ is None:
+            raise ValueError("Type must be present if matchingRule is absent.")
         super().__init__(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
 
     @property

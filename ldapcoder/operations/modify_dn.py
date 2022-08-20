@@ -3,9 +3,7 @@
 from typing import List, Optional
 
 from ldapcoder.berutils import BERBase, BERBoolean, BERSequence, TagClasses
-from ldapcoder.ldaputils import (
-    LDAPDN, LDAPProtocolRequest, LDAPRelativeDN, check, decode,
-)
+from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPRelativeDN, decode
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
@@ -33,13 +31,16 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPModifyDNRequest":
         vals = cls.unwrap(content)
-        check(3 <= len(vals) <= 4)
+        if len(vals) < 3:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 4:
+            cls.handle_additional_vals(vals[4:])
 
         entry = decode(vals[0], LDAPDN).value
         newrdn = decode(vals[1], LDAPRelativeDN).value
         deleteoldrdn = decode(vals[2], BERBoolean).value
         newSuperior = None
-        if len(vals) == 4:
+        if len(vals) >= 4:
             newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).value
         return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 

@@ -1,6 +1,5 @@
 from typing import Any
 
-from ldapcoder.ldaputils import LDAPProtocolOp, check
 from ldapcoder.message import LDAPMessage
 from ldapcoder.operations.extended import LDAPExtendedResponse
 from ldapcoder.registry import EXTENDED_RESPONSES
@@ -8,8 +7,7 @@ from ldapcoder.result import ResultCodes
 
 
 class LDAPUnsolicitedNotification(LDAPMessage):
-    def __init__(self, operation: "LDAPProtocolOp", **kwargs: Any):
-        check(isinstance(operation, LDAPExtendedResponse))
+    def __init__(self, operation: LDAPExtendedResponse, **kwargs: Any):
         super().__init__(msg_id=0, operation=operation)
 
 

@@ -5,7 +5,7 @@ from typing import List, Optional, Type
 
 from ldapcoder.berutils import BERBase, BEREnumerated, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPURI, LDAPException, LDAPProtocolResponse, LDAPString, check, decode,
+    LDAPDN, LDAPURI, LDAPException, LDAPProtocolResponse, LDAPString, decode,
 )
 
 
@@ -22,7 +22,8 @@ class LDAPReferral(BERSequence):
         return cls(uris=uris)
 
     def __init__(self, uris: List[str]):
-        check(len(uris) >= 1)
+        if len(uris) == 0:
+            raise ValueError(f"{self.__class__.__name__} expects at least one uri.")
         self.value = uris
 
     def to_wire(self) -> bytes:
@@ -159,14 +160,17 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPResult":
         vals = cls.unwrap(content)
-        check(3 <= len(vals) <= 4)
+        if len(vals) < 3:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 4:
+            cls.handle_additional_vals(vals[4:])
 
         resultCode = decode(vals[0], LDAPResultCode).value
         matchedDN = decode(vals[1], LDAPDN).value
         diagnosticMessage = decode(vals[2], LDAPString).value
 
         referral = None
-        if len(vals) == 4:
+        if len(vals) >= 4:
             referral = decode(vals[3], LDAPReferral).value
 
         r = cls(
@@ -179,15 +183,13 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
 
     def __init__(self, resultCode: ResultCodes, matchedDN: str, diagnosticMessage: str,
                  referral: List[str] = None):
-        if resultCode is resultCode.referral:
-            # the referral result code is set iff there are referrals
-            check(referral is not None)
+        # the referral result code is set iff there are referrals
+        if (resultCode is resultCode.referral and referral is None
+                or resultCode is not resultCode.referral and referral is not None):
+            raise ValueError("resultCode is ResultCode.referral iff referral is given.")
         self.resultCode = resultCode
         self.matchedDN = matchedDN
         self.diagnosticMessage = diagnosticMessage
-        if referral is not None:
-            # the referral result code is set iff there are referrals
-            check(resultCode is resultCode.referral)
         self.referral = referral
 
     def to_wire(self) -> bytes:

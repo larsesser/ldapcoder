@@ -3,8 +3,8 @@
 from typing import List, Optional
 
 from ldapcoder.berutils import BERBase, BEROctetString, BERSequence, TagClasses
-from ldapcoder.exceptions import UnknownTagError
-from ldapcoder.ldaputils import LDAPOID, LDAPProtocolResponse, check
+from ldapcoder.exceptions import DuplicateTagReceivedError
+from ldapcoder.ldaputils import LDAPOID, LDAPProtocolResponse
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 
 
@@ -31,21 +31,24 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPIntermediateResponse":
         vals = cls.unwrap(content)
-        check(0 <= len(vals) <= 2)
 
         responseName = None
         responseValue = None
-        for unknown_tag, unkown_content in vals:
+        additional = []
+        for unknown_tag, unknown_content in vals:
             if unknown_tag == LDAPIntermediateResponse_responseName.tag:
                 if responseName is not None:
-                    raise ValueError
-                responseName = LDAPIntermediateResponse_responseName.from_wire(unkown_content).value
+                    raise DuplicateTagReceivedError("responseName")
+                responseName = LDAPIntermediateResponse_responseName.from_wire(unknown_content).value
             elif unknown_tag == LDAPIntermediateResponse_responseValue.tag:
                 if responseValue is not None:
-                    raise ValueError
-                responseValue = LDAPIntermediateResponse_responseValue.from_wire(unkown_content).value
+                    raise DuplicateTagReceivedError("responseValue")
+                responseValue = LDAPIntermediateResponse_responseValue.from_wire(unknown_content).value
             else:
-                raise UnknownTagError(unknown_tag)
+                additional.append((unknown_tag, unknown_content))
+        if additional:
+            cls.handle_additional_vals(additional)
+
         return cls(responseName=responseName, responseValue=responseValue)
 
     def __init__(self, responseName: str = None, responseValue: bytes = None):

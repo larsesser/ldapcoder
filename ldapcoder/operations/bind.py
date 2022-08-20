@@ -6,8 +6,8 @@ from typing import List, Optional
 from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, TagClasses,
 )
-from ldapcoder.exceptions import UnknownTagError
-from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, check, decode
+from ldapcoder.exceptions import DuplicateTagReceivedError, UnknownTagError
+from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, decode
 from ldapcoder.registry import AUTHENTICATION_CHOICES, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
@@ -38,15 +38,17 @@ class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindRequest_SaslAuthentication":
         vals = cls.unwrap(content)
-        check(len(vals) in {1, 2})
+        if len(vals) < 1:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
 
         mechanism = decode(vals[0], LDAPString).value
         # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
         # Credentials are optional and not always provided
-        if len(vals) == 1:
-            return cls(mechanism=mechanism, credentials=None)
-
-        credentials = decode(vals[1], BEROctetString).value
+        credentials = None
+        if len(vals) >= 2:
+            credentials = decode(vals[1], BEROctetString).value
         return cls(mechanism=mechanism, credentials=credentials)
 
     def __init__(self, mechanism: str, credentials: bytes = None):
@@ -81,7 +83,10 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindRequest":
         vals = cls.unwrap(content)
-        check(len(vals) == 3)
+        if len(vals) < 3:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 3:
+            cls.handle_additional_vals(vals[3:])
 
         version = decode(vals[0], BERInteger).value
         dn = decode(vals[1], LDAPDN).value
@@ -125,7 +130,8 @@ class LDAPBindResponse(LDAPResult):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPBindResponse":
         vals = cls.unwrap(content)
-        check(3 <= len(vals) <= 5)
+        if len(vals) < 3:
+            cls.handle_missing_vals(vals)
 
         resultCode = decode(vals[0], LDAPResultCode).value
         matchedDN = decode(vals[1], LDAPDN).value
@@ -133,17 +139,20 @@ class LDAPBindResponse(LDAPResult):
 
         referral = None
         serverSaslCreds = None
-        if len(vals) == 4:
-            unknown_tag, unknown_content = vals[3]
+        additional = []
+        for unknown_tag, unknown_content in vals[3:]:
             if unknown_tag == LDAPReferral.tag:
-                referral = decode(vals[3], LDAPReferral).value
+                if referral is not None:
+                    raise DuplicateTagReceivedError("referral")
+                referral = LDAPReferral.from_wire(unknown_content).value
             elif unknown_tag == LDAPBindResponse_serverSaslCreds.tag:
-                serverSaslCreds = decode(vals[3], LDAPBindResponse_serverSaslCreds).value
+                if serverSaslCreds is not None:
+                    raise DuplicateTagReceivedError("serverSaslCreds")
+                serverSaslCreds = LDAPBindResponse_serverSaslCreds.from_wire(unknown_content).value
             else:
-                raise UnknownTagError(unknown_tag)
-        elif len(vals) == 5:
-            referral = decode(vals[3], LDAPReferral).value
-            serverSaslCreds = decode(vals[4], LDAPBindResponse_serverSaslCreds).value
+                additional.append((unknown_tag, unknown_content))
+        if additional:
+            cls.handle_additional_vals(additional)
 
         r = cls(
             resultCode=resultCode,

@@ -2,7 +2,7 @@
 
 from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPAttributeValueAssertion, LDAPProtocolRequest, check, decode,
+    LDAPDN, LDAPAttributeValueAssertion, LDAPProtocolRequest, decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -22,7 +22,10 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPCompareRequest":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         entry = decode(vals[0], LDAPDN).value
         ava = decode(vals[1], LDAPAttributeValueAssertion)
         return cls(entry=entry, ava=ava)

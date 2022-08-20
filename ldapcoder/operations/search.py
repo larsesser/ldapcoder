@@ -10,7 +10,7 @@ from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.filter import LDAPFilter
 from ldapcoder.ldaputils import (
     LDAPDN, LDAPURI, LDAPAttributeSelection, LDAPPartialAttribute,
-    LDAPPartialAttributeList, LDAPProtocolRequest, LDAPProtocolResponse, check, decode,
+    LDAPPartialAttributeList, LDAPProtocolRequest, LDAPProtocolResponse, decode,
 )
 from ldapcoder.registry import FILTERS, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -82,7 +82,10 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPSearchRequest":
         vals = cls.unwrap(content)
-        check(len(vals) == 8)
+        if len(vals) < 8:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 8:
+            cls.handle_additional_vals(vals[8:])
 
         baseObject = decode(vals[0], LDAPDN).value
         scope = decode(vals[1], LDAPSearchScope).value
@@ -95,6 +98,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             raise UnknownTagError(filter_tag)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         filter_ = FILTERS[filter_tag].from_wire(filter_content)
+        assert isinstance(filter_, LDAPFilter)
         attributes = decode(vals[7], LDAPAttributeSelection).value
 
         return cls(
@@ -104,7 +108,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
             sizeLimit=sizeLimit,
             timeLimit=timeLimit,
             typesOnly=typesOnly,
-            filter_=filter_,  # type: ignore[arg-type]
+            filter_=filter_,
             attributes=attributes,
         )
 
@@ -163,7 +167,10 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPSearchResultEntry":
         vals = cls.unwrap(content)
-        check(len(vals) == 2)
+        if len(vals) < 2:
+            cls.handle_missing_vals(vals)
+        if len(vals) > 2:
+            cls.handle_additional_vals(vals[2:])
         objectName = decode(vals[0], LDAPDN).value
         attributes = decode(vals[1], LDAPPartialAttributeList).value
         return cls(objectName=objectName, attributes=attributes)
@@ -196,7 +203,8 @@ class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
         return cls(uris=uris)
 
     def __init__(self, uris: List[str]):
-        check(len(uris) >= 1)
+        if len(uris) == 0:
+            raise ValueError(f"{self.__class__.__name__} expects at least one uri.")
         self.value = uris
 
     def to_wire(self) -> bytes:
