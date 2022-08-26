@@ -24,7 +24,8 @@ from ldapcoder.filter import (
     LDAPFilter_substrings_initial,
 )
 from ldapcoder.ldaputils import (
-    LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute, LDAPProtocolOp,
+    DistinguishedName, LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
+    LDAPProtocolOp, escaped_split,
 )
 from ldapcoder.message import LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
@@ -69,6 +70,63 @@ class MyTests(unittest.TestCase):
         tag, content = first_level[0]
         self.assertEqual(expected_tag, tag)
         return content
+
+    def test_dns_simple(self) -> None:
+        # simple dn in string representation without any escaping
+        case = 'UID=jsmith,DC=example,DC=net'
+        dn = DistinguishedName(case)
+        self.assertEqual(case, dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.bytes_attributes)
+            self.assertEqual(1, len(rdn.attributes))
+
+    def test_dns_multivalued(self) -> None:
+        # one rdn has two values
+        case = 'OU=Sales+CN=J.  Smith,DC=example,DC=net'
+        dn = DistinguishedName(case)
+        # attributes inside rdns are unordered, but we apply a stable sorting
+        self.assertEqual('CN=J.  Smith+OU=Sales,DC=example,DC=net', dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.bytes_attributes)
+
+    def test_dns_escape_special_chars(self) -> None:
+        # this dn contains some '"' and ',' chars which are escaped by '\'
+        case = 'CN=James \\"Jim\\" Smith\\, III\\\\,DC=example,DC=net'
+        dn = DistinguishedName(case)
+        self.assertEqual(case, dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.bytes_attributes)
+            self.assertEqual(1, len(rdn.attributes))
+
+    def test_dns_escape_unicode_simple(self) -> None:
+        # this dn contains an utf-8 encoded carriage-return unicode char as hex digits
+        case = 'CN=Before\\0dAfter,DC=example,DC=net'
+        dn = DistinguishedName(case)
+        # we do not re-escape the unicode char here
+        # TODO maybe escape all not-printable unicode chars by default?
+        self.assertEqual("CN=Before\rAfter,DC=example,DC=net", dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.bytes_attributes)
+            self.assertEqual(1, len(rdn.attributes))
+
+    def test_dns_escape_unicode_enhanced(self) -> None:
+        # this dn contains two utf-8 encoded chars as pairs of two hex digits
+        case = 'CN=Lu\\C4\\8Di\\C4\\87,DC=example,DC=net'
+        dn = DistinguishedName(case)
+        # we do not re-escape the unicode chars here
+        self.assertEqual("CN=Lučić,DC=example,DC=net", dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.bytes_attributes)
+            self.assertEqual(1, len(rdn.attributes))
+
+    def test_dns_hexstring(self) -> None:
+        # this dn is present as numerioid=hexstring representation
+        case = '1.3.6.1.4.1.1466.0=#04024869'
+        dn = DistinguishedName(case)
+        self.assertEqual(case, dn.string)
+        for rdn in dn.rdns:
+            self.assertEqual({}, rdn.attributes)
+            self.assertEqual(1, len(rdn.bytes_attributes))
 
     def test_registries(self) -> None:
         @PROTOCOL_OPERATIONS.add
