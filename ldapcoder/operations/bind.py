@@ -43,12 +43,12 @@ class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
 
-        mechanism = decode(vals[0], LDAPString).value
+        mechanism = decode(vals[0], LDAPString).string
         # per https://ldap.com/ldapv3-wire-protocol-reference-bind/
         # Credentials are optional and not always provided
         credentials = None
         if len(vals) >= 2:
-            credentials = decode(vals[1], BEROctetString).value
+            credentials = decode(vals[1], BEROctetString).bytes_
         return cls(mechanism=mechanism, credentials=credentials)
 
     def __init__(self, mechanism: str, credentials: bytes = None):
@@ -88,8 +88,8 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         if len(vals) > 3:
             cls.handle_additional_vals(vals[3:])
 
-        version = decode(vals[0], BERInteger).value
-        dn = decode(vals[1], LDAPDN).value
+        version = decode(vals[0], BERInteger).integer
+        dn = decode(vals[1], LDAPDN).string
 
         auth_tag, auth_content = vals[2]
         if auth_tag not in AUTHENTICATION_CHOICES:
@@ -133,9 +133,9 @@ class LDAPBindResponse(LDAPResult):
         if len(vals) < 3:
             cls.handle_missing_vals(vals)
 
-        resultCode = decode(vals[0], LDAPResultCode).value
-        matchedDN = decode(vals[1], LDAPDN).value
-        diagnosticMessage = decode(vals[2], LDAPString).value
+        resultCode = decode(vals[0], LDAPResultCode).member
+        matchedDN = decode(vals[1], LDAPDN).string
+        diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
         serverSaslCreds = None
@@ -144,11 +144,11 @@ class LDAPBindResponse(LDAPResult):
             if unknown_tag == LDAPReferral.tag:
                 if referral is not None:
                     raise DuplicateTagReceivedError("referral")
-                referral = LDAPReferral.from_wire(unknown_content).value
+                referral = LDAPReferral.from_wire(unknown_content).uris
             elif unknown_tag == LDAPBindResponse_serverSaslCreds.tag:
                 if serverSaslCreds is not None:
                     raise DuplicateTagReceivedError("serverSaslCreds")
-                serverSaslCreds = LDAPBindResponse_serverSaslCreds.from_wire(unknown_content).value
+                serverSaslCreds = LDAPBindResponse_serverSaslCreds.from_wire(unknown_content).bytes_
             else:
                 additional.append((unknown_tag, unknown_content))
         if additional:

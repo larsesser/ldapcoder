@@ -36,12 +36,12 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
         if len(vals) > 4:
             cls.handle_additional_vals(vals[4:])
 
-        entry = decode(vals[0], LDAPDN).value
-        newrdn = decode(vals[1], LDAPRelativeDN).value
-        deleteoldrdn = decode(vals[2], BERBoolean).value
+        entry = decode(vals[0], LDAPDN).string
+        newrdn = decode(vals[1], LDAPRelativeDN).string
+        deleteoldrdn = decode(vals[2], BERBoolean).boolean
         newSuperior = None
         if len(vals) >= 4:
-            newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).value
+            newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).string
         return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 
     def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: str = None):

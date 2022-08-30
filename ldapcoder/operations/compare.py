@@ -26,7 +26,7 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        entry = decode(vals[0], LDAPDN).value
+        entry = decode(vals[0], LDAPDN).string
         ava = decode(vals[1], LDAPAttributeValueAssertion)
         return cls(entry=entry, ava=ava)
 

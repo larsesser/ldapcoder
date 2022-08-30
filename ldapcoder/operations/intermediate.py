@@ -39,11 +39,11 @@ class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
             if unknown_tag == LDAPIntermediateResponse_responseName.tag:
                 if responseName is not None:
                     raise DuplicateTagReceivedError("responseName")
-                responseName = LDAPIntermediateResponse_responseName.from_wire(unknown_content).value
+                responseName = LDAPIntermediateResponse_responseName.from_wire(unknown_content).oid
             elif unknown_tag == LDAPIntermediateResponse_responseValue.tag:
                 if responseValue is not None:
                     raise DuplicateTagReceivedError("responseValue")
-                responseValue = LDAPIntermediateResponse_responseValue.from_wire(unknown_content).value
+                responseValue = LDAPIntermediateResponse_responseValue.from_wire(unknown_content).bytes_
             else:
                 additional.append((unknown_tag, unknown_content))
         if additional:

@@ -27,8 +27,8 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        entry = decode(vals[0], LDAPDN).value
-        attributes = decode(vals[1], LDAPAttributeList).value
+        entry = decode(vals[0], LDAPDN).string
+        attributes = decode(vals[1], LDAPAttributeList).attributes
         return cls(entry=entry, attributes=attributes)
 
     def __init__(self, entry: str, attributes: List[LDAPAttribute]):

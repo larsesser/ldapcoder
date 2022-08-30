@@ -57,7 +57,7 @@ class LDAPMessage(BERSequence):
         if len(vals) > 3:
             cls.handle_additional_vals(vals[3:])
 
-        msg_id = decode(vals[0], LDAPMessageId).value
+        msg_id = decode(vals[0], LDAPMessageId).message_id
 
         operation_tag, operation_content = vals[1]
         if operation_tag not in PROTOCOL_OPERATIONS:
@@ -146,7 +146,7 @@ class LDAPControl(BERSequence):
         if len(vals) < 1:
             cls.handle_missing_vals(vals)
 
-        controlType = decode(vals[0], LDAPOID).value
+        controlType = decode(vals[0], LDAPOID).oid
 
         criticality = None
         controlValue = None
@@ -156,12 +156,12 @@ class LDAPControl(BERSequence):
                 if criticality is not None:
                     # TODO this may lead to false-positive catches
                     raise DuplicateTagReceivedError("criticality")
-                criticality = BERBoolean.from_wire(unknown_content).value
+                criticality = BERBoolean.from_wire(unknown_content).boolean
             elif unknown_tag == BEROctetString.tag:
                 if controlValue is not None:
                     # TODO this may lead to false-positive catches
                     raise DuplicateTagReceivedError("controlValue")
-                controlValue = BEROctetString.from_wire(unknown_content).value
+                controlValue = BEROctetString.from_wire(unknown_content).bytes_
             else:
                 additional.append((unknown_tag, unknown_content))
         if additional:

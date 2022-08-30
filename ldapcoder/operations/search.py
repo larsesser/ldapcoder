@@ -25,7 +25,7 @@ class SearchScopes(enum.IntEnum):
 
 
 class LDAPSearchScope(BEREnumerated):
-    value: SearchScopes
+    member: SearchScopes
 
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
@@ -41,7 +41,7 @@ class DerefAliases(enum.IntEnum):
 
 
 class LDAPDerefAlias(BEREnumerated):
-    value: DerefAliases
+    member: DerefAliases
 
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
@@ -87,19 +87,19 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
         if len(vals) > 8:
             cls.handle_additional_vals(vals[8:])
 
-        baseObject = decode(vals[0], LDAPDN).value
-        scope = decode(vals[1], LDAPSearchScope).value
-        derefAlias = decode(vals[2], LDAPDerefAlias).value
-        sizeLimit = decode(vals[3], BERInteger).value
-        timeLimit = decode(vals[4], BERInteger).value
-        typesOnly = decode(vals[5], BERBoolean).value
+        baseObject = decode(vals[0], LDAPDN).string
+        scope = decode(vals[1], LDAPSearchScope).member
+        derefAlias = decode(vals[2], LDAPDerefAlias).member
+        sizeLimit = decode(vals[3], BERInteger).integer
+        timeLimit = decode(vals[4], BERInteger).integer
+        typesOnly = decode(vals[5], BERBoolean).boolean
         filter_tag, filter_content = vals[6]
         if filter_tag not in FILTERS:
             raise UnknownTagError(filter_tag)
         # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         filter_ = FILTERS[filter_tag].from_wire(filter_content)
         assert isinstance(filter_, LDAPFilter)
-        attributes = decode(vals[7], LDAPAttributeSelection).value
+        attributes = decode(vals[7], LDAPAttributeSelection).selectors
 
         return cls(
             baseObject=baseObject,
@@ -171,8 +171,8 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        objectName = decode(vals[0], LDAPDN).value
-        attributes = decode(vals[1], LDAPPartialAttributeList).value
+        objectName = decode(vals[0], LDAPDN).string
+        attributes = decode(vals[1], LDAPPartialAttributeList).partial_attributes
         return cls(objectName=objectName, attributes=attributes)
 
     def __init__(self, objectName: str, attributes: List[LDAPPartialAttribute]):
@@ -194,24 +194,24 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x13
-    value: List[str]
+    uris: List[str]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPSearchResultReference":
         vals = cls.unwrap(content)
-        uris = [decode(val, LDAPURI).value for val in vals]
+        uris = [decode(val, LDAPURI).string for val in vals]
         return cls(uris=uris)
 
     def __init__(self, uris: List[str]):
         if len(uris) == 0:
             raise ValueError(f"{self.__class__.__name__} expects at least one uri.")
-        self.value = uris
+        self.uris = uris
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPURI(uri) for uri in self.value])
+        return self.wrap([LDAPURI(uri) for uri in self.uris])
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value})"
+        return self.__class__.__name__ + f"(value={self.uris})"
 
 
 # SearchResultDone ::= [APPLICATION 5] LDAPResult

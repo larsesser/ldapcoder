@@ -54,7 +54,22 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,
 #               -- [ISO10646] characters
 class LDAPString(BEROctetString):
-    value: str  # type: ignore[assignment]
+    string: str
+
+    @property  # type: ignore[override]
+    def bytes_(self) -> bytes:  # type: ignore[override]
+        try:
+            encoded = self.string.encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise EncodingError from e
+        return encoded
+
+    @bytes_.setter
+    def bytes_(self, value: bytes) -> None:
+        try:
+            self.string = value.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPString":
@@ -67,14 +82,7 @@ class LDAPString(BEROctetString):
         return cls(utf8)
 
     def __init__(self, value: str):
-        super().__init__(value)  # type: ignore[arg-type]
-
-    def to_wire(self) -> bytes:
-        try:
-            encoded = self.value.encode("utf-8")
-        except UnicodeEncodeError as e:
-            raise EncodingError from e
-        return bytes((self.tag,)) + berlen(encoded) + encoded
+        super().__init__(value.encode("utf-8"))
 
 
 def escaped_split(string: str, delim: str, escape: str = '\\') -> List[str]:
@@ -377,7 +385,22 @@ def is_numericoid(value: str) -> bool:
 # LDAPOID ::= OCTET STRING -- Constrained to <numericoid>
 #            -- [RFC4512]
 class LDAPOID(BEROctetString):
-    value: str  # type: ignore[assignment]
+    oid: str
+
+    @property  # type: ignore[override]
+    def bytes_(self) -> bytes:  # type: ignore[override]
+        try:
+            encoded = self.oid.encode("utf-8")
+        except UnicodeEncodeError as e:
+            raise EncodingError from e
+        return encoded
+
+    @bytes_.setter
+    def bytes_(self, value: bytes) -> None:
+        try:
+            self.oid = value.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPOID":
@@ -391,14 +414,7 @@ class LDAPOID(BEROctetString):
         # validate the given value to be a numericoid
         if not is_numericoid(value):
             raise ValueError(f"Given value is no valid numericoid: {value}")
-        super().__init__(value)  # type: ignore[arg-type]
-
-    def to_wire(self) -> bytes:
-        try:
-            encoded = self.value.encode("utf-8")
-        except UnicodeEncodeError as e:
-            raise EncodingError from e
-        return bytes((self.tag,)) + berlen(encoded) + encoded
+        super().__init__(value.encode("utf-8"))
 
 
 # AttributeValue ::= OCTET STRING
@@ -409,7 +425,20 @@ class LDAPAttributeValue(BEROctetString):
 # MessageID ::= INTEGER (0 ..  maxInt)
 # maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
 class LDAPMessageId(BERInteger):
-    pass
+    message_id: int
+
+    @property  # type: ignore[override]
+    def integer(self) -> int:  # type: ignore[override]
+        return self.message_id
+
+    @integer.setter
+    def integer(self, value: int) -> None:
+        self.message_id = value
+
+    def __init__(self, value: int):
+        if value >= (2**31):
+            raise ValueError("Given value exceeded maximum value.")
+        super().__init__(value)
 
 
 class LDAPProtocolOp(BERBase, metaclass=abc.ABCMeta):
@@ -463,8 +492,8 @@ class LDAPAttributeValueAssertion(BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        attributeDesc = decode(vals[0], LDAPAttributeDescription).value
-        assertionValue = decode(vals[1], LDAPAssertionValue).value
+        attributeDesc = decode(vals[0], LDAPAttributeDescription).string
+        assertionValue = decode(vals[1], LDAPAssertionValue).bytes_
         return cls(attributeDesc=attributeDesc, assertionValue=assertionValue)
 
     def __init__(self, attributeDesc: str, assertionValue: bytes):
@@ -489,41 +518,41 @@ class LDAPAttributeValueAssertion(BERSequence):
 # noattrs = %x31.2E.31 ; "1.1"
 # alluserattrs = %x2A ; asterisk ("*")
 class LDAPAttributeSelection(BERSequence):
-    value: List[str]
+    selectors: List[str]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeSelection":
-        value = [decode(val, LDAPString).value for val in cls.unwrap(content)]
+        value = [decode(val, LDAPString).string for val in cls.unwrap(content)]
         return cls(value)
 
     def __init__(self, value: List[str]):
-        self.value = value
+        self.selectors = value
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPString(val) for val in self.value])
+        return self.wrap([LDAPString(val) for val in self.selectors])
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value})"
+        return self.__class__.__name__ + f"(value={self.selectors})"
 
 
 class LDAPAttributeValueSet(BERSet):
-    value: List[bytes]
+    values: List[bytes]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeValueSet":
-        value = [decode(val, LDAPAttributeValue).value for val in cls.unwrap(content)]
+        value = [decode(val, LDAPAttributeValue).bytes_ for val in cls.unwrap(content)]
         return cls(value)
 
     def __init__(self, value: List[bytes]):
         # Note that we do not check that no two values of an attribute are equivalent.
         # This needs more context than is present here. See [RFC4512], Section 2.2
-        self.value = value
+        self.values = value
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPAttributeValue(val) for val in self.value])
+        return self.wrap([LDAPAttributeValue(val) for val in self.values])
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r})"
+        return self.__class__.__name__ + f"(value={self.values!r})"
 
 
 # PartialAttribute ::= SEQUENCE {
@@ -540,8 +569,8 @@ class LDAPPartialAttribute(BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        type_ = decode(vals[0], LDAPAttributeDescription).value
-        values = decode(vals[1], LDAPAttributeValueSet).value
+        type_ = decode(vals[0], LDAPAttributeDescription).string
+        values = decode(vals[1], LDAPAttributeValueSet).values
         return cls(type_=type_, values=values)
 
     def __init__(self, type_: str, values: List[bytes]):
@@ -560,7 +589,7 @@ class LDAPPartialAttribute(BERSequence):
 # PartialAttributeList ::= SEQUENCE OF
 #        partialAttribute PartialAttribute
 class LDAPPartialAttributeList(BERSequence):
-    value: List[LDAPPartialAttribute]
+    partial_attributes: List[LDAPPartialAttribute]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPPartialAttributeList":
@@ -568,13 +597,13 @@ class LDAPPartialAttributeList(BERSequence):
         return cls(value)
 
     def __init__(self, value: List[LDAPPartialAttribute]):
-        self.value = value
+        self.partial_attributes = value
 
     def to_wire(self) -> bytes:
-        return self.wrap(self.value)
+        return self.wrap(self.partial_attributes)
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r}"
+        return self.__class__.__name__ + f"(value={self.partial_attributes!r}"
 
 
 # Attribute ::= PartialAttribute(WITH COMPONENTS {
@@ -589,7 +618,7 @@ class LDAPAttribute(LDAPPartialAttribute):
 
 # AttributeList ::= SEQUENCE OF attribute Attribute
 class LDAPAttributeList(BERSequence):
-    value: List[LDAPAttribute]
+    attributes: List[LDAPAttribute]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPAttributeList":
@@ -597,10 +626,10 @@ class LDAPAttributeList(BERSequence):
         return cls(value)
 
     def __init__(self, value: List[LDAPAttribute]):
-        self.value = value
+        self.attributes = value
 
     def to_wire(self) -> bytes:
-        return self.wrap(self.value)
+        return self.wrap(self.attributes)
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r}"
+        return self.__class__.__name__ + f"(value={self.attributes!r}"

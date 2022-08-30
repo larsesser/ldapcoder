@@ -38,10 +38,10 @@ class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        requestName = decode(vals[0], LDAPExtendedRequest_requestName).value
+        requestName = decode(vals[0], LDAPExtendedRequest_requestName).oid
         requestValue = None
         if len(vals) >= 2:
-            requestValue = decode(vals[1], LDAPExtendedRequest_requestValue).value
+            requestValue = decode(vals[1], LDAPExtendedRequest_requestValue).bytes_
         return cls(requestName=requestName, requestValue=requestValue)
 
     def __init__(self, requestName: str, requestValue: bytes = None):
@@ -88,9 +88,9 @@ class LDAPExtendedResponse(LDAPResult):
         if len(vals) < 3:
             cls.handle_missing_vals(vals)
 
-        resultCode = decode(vals[0], LDAPResultCode).value
-        matchedDN = decode(vals[1], LDAPDN).value
-        diagnosticMessage = decode(vals[2], LDAPString).value
+        resultCode = decode(vals[0], LDAPResultCode).member
+        matchedDN = decode(vals[1], LDAPDN).string
+        diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
         responseName = None
@@ -100,15 +100,15 @@ class LDAPExtendedResponse(LDAPResult):
             if unknown_tag == LDAPReferral.tag:
                 if referral is not None:
                     raise DuplicateTagReceivedError("referral")
-                referral = LDAPReferral.from_wire(unknown_content).value
+                referral = LDAPReferral.from_wire(unknown_content).uris
             elif unknown_tag == LDAPExtendedResponse_requestName.tag:
                 if responseName is not None:
                     raise DuplicateTagReceivedError("responseName")
-                responseName = LDAPExtendedResponse_requestName.from_wire(unknown_content).value
+                responseName = LDAPExtendedResponse_requestName.from_wire(unknown_content).oid
             elif unknown_tag == LDAPExtendedResponse_requestValue.tag:
                 if responseValue is not None:
                     raise DuplicateTagReceivedError("responseValue")
-                responseValue = LDAPExtendedResponse_requestValue.from_wire(unknown_content).value
+                responseValue = LDAPExtendedResponse_requestValue.from_wire(unknown_content).bytes_
             else:
                 additional.append((unknown_tag, unknown_content))
         if additional:

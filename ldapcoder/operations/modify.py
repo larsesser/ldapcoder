@@ -20,7 +20,7 @@ class ModifyOperations(enum.IntEnum):
 
 
 class LDAPModify_operation(BEREnumerated):
-    value: ModifyOperations
+    member: ModifyOperations
 
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
@@ -38,7 +38,7 @@ class LDAPModify_change(BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        operation = decode(vals[0], LDAPModify_operation).value
+        operation = decode(vals[0], LDAPModify_operation).member
         modification = decode(vals[1], LDAPPartialAttribute)
         return cls(operation=operation, modification=modification)
 
@@ -55,7 +55,7 @@ class LDAPModify_change(BERSequence):
 
 
 class LDAPModify_changes(BERSequence):
-    value: List[LDAPModify_change]
+    changes: List[LDAPModify_change]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPModify_changes":
@@ -63,13 +63,13 @@ class LDAPModify_changes(BERSequence):
         return cls(changes)
 
     def __init__(self, value: List[LDAPModify_change]):
-        self.value = value
+        self.changes = value
 
     def to_wire(self) -> bytes:
-        return self.wrap(self.value)
+        return self.wrap(self.changes)
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r})"
+        return self.__class__.__name__ + f"(value={self.changes!r})"
 
 
 # ModifyRequest ::= [APPLICATION 6] SEQUENCE {
@@ -95,8 +95,8 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        object_ = decode(vals[0], LDAPDN).value
-        changes = decode(vals[1], LDAPModify_changes).value
+        object_ = decode(vals[0], LDAPDN).string
+        changes = decode(vals[1], LDAPModify_changes).changes
         return cls(object_=object_, changes=changes)
 
     def __init__(self, object_: str, changes: List[LDAPModify_change]):

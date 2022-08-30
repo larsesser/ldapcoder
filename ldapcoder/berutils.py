@@ -176,7 +176,7 @@ class BERBase(metaclass=abc.ABCMeta):
 class BERInteger(BERBase):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x02
-    value: int
+    integer: int
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BERInteger":
@@ -186,39 +186,39 @@ class BERInteger(BERBase):
         """Create a new BERInteger object.
         value is an integer.
         """
-        self.value = value
+        self.integer = value
 
     def to_wire(self) -> bytes:
-        encoded = int2ber(self.value)
+        encoded = int2ber(self.integer)
         return bytes((self.tag,)) + berlen(encoded) + encoded
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value})"
+        return self.__class__.__name__ + f"(value={self.integer})"
 
 
 class BEROctetString(BERBase):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x04
-    value: bytes
+    bytes_: bytes
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BEROctetString":
         return cls(content)
 
     def __init__(self, value: bytes) -> None:
-        self.value = value
+        self.bytes_ = value
 
     def to_wire(self) -> bytes:
-        return bytes((self.tag,)) + berlen(self.value) + self.value
+        return bytes((self.tag,)) + berlen(self.bytes_) + self.bytes_
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r})"
+        return self.__class__.__name__ + f"(value={self.bytes_!r})"
 
 
 class BERNull(BERBase):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x05
-    value = None
+    null = None
 
     def __init__(self) -> None:
         pass
@@ -240,7 +240,7 @@ class BERNull(BERBase):
 class BERBoolean(BERBase):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x01
-    value: bool
+    boolean: bool
 
     @classmethod
     def from_wire(cls, content: bytes) -> "BERBoolean":
@@ -250,20 +250,20 @@ class BERBoolean(BERBase):
         """Create a new BERInteger object.
         value is an integer.
         """
-        self.value = value
+        self.boolean = value
 
     def to_wire(self) -> bytes:
-        value = bytes((0xFF,)) if self.value else bytes((0x00,))
+        value = bytes((0xFF,)) if self.boolean else bytes((0x00,))
         return bytes((self.tag,)) + berlen(value) + value
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value})"
+        return self.__class__.__name__ + f"(value={self.boolean})"
 
 
 class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
     _tag_class = TagClasses.UNIVERSAL
     _tag = 0x0A
-    value: enum.IntEnum
+    member: enum.IntEnum
 
     @classmethod
     @abc.abstractmethod
@@ -275,14 +275,14 @@ class BEREnumerated(BERBase, metaclass=abc.ABCMeta):
         return cls(cls.enum_cls()(ber2int(content)))
 
     def __init__(self, value: enum.IntEnum) -> None:
-        self.value = value
+        self.member = value
 
     def to_wire(self) -> bytes:
-        encoded = int2ber(self.value)
+        encoded = int2ber(self.member)
         return bytes((self.tag,)) + berlen(encoded) + encoded
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value!r})"
+        return self.__class__.__name__ + f"(value={self.member!r})"
 
 
 def format_vals(vals: List[Tuple[int, bytes]], offset: int = 0) -> str:

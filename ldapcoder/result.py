@@ -13,24 +13,24 @@ from ldapcoder.ldaputils import (
 class LDAPReferral(BERSequence):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x03
-    value: List[str]
+    uris: List[str]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPReferral":
         vals = cls.unwrap(content)
-        uris = [decode(val, LDAPURI).value for val in vals]
+        uris = [decode(val, LDAPURI).string for val in vals]
         return cls(uris=uris)
 
     def __init__(self, uris: List[str]):
         if len(uris) == 0:
             raise ValueError(f"{self.__class__.__name__} expects at least one uri.")
-        self.value = uris
+        self.uris = uris
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPURI(uri) for uri in self.value])
+        return self.wrap([LDAPURI(uri) for uri in self.uris])
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"(value={self.value}"
+        return self.__class__.__name__ + f"(value={self.uris}"
 
 
 @enum.unique
@@ -92,7 +92,7 @@ class ResultCodes(enum.IntEnum):
 
 
 class LDAPResultCode(BEREnumerated):
-    value: ResultCodes
+    member: ResultCodes
 
     @classmethod
     def enum_cls(cls) -> Type[enum.IntEnum]:
@@ -165,13 +165,13 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         if len(vals) > 4:
             cls.handle_additional_vals(vals[4:])
 
-        resultCode = decode(vals[0], LDAPResultCode).value
-        matchedDN = decode(vals[1], LDAPDN).value
-        diagnosticMessage = decode(vals[2], LDAPString).value
+        resultCode = decode(vals[0], LDAPResultCode).member
+        matchedDN = decode(vals[1], LDAPDN).string
+        diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
         if len(vals) >= 4:
-            referral = decode(vals[3], LDAPReferral).value
+            referral = decode(vals[3], LDAPReferral).uris
 
         r = cls(
             resultCode=resultCode,
