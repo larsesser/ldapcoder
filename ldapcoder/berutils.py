@@ -1,7 +1,7 @@
 """Pure, simple, BER encoding and decoding"""
 
 # This BER library is currently aimed at supporting LDAP, thus
-# the following restrictions from RFC2251 apply:
+# the following restrictions from RFC4511 apply:
 #
 # (1) Only the definite form of length encoding will be used.
 #
@@ -21,6 +21,7 @@ from typing import Any, Callable, List, Sequence, Tuple, Type
 
 from ldapcoder.exceptions import DecodingError, EncodingError, InsufficientDataError
 
+# TAG
 # xxxxxxxx
 # |/|\.../
 # | | |
@@ -102,7 +103,8 @@ def ber2int(e: bytes, signed: bool = True) -> int:
     return v
 
 
-class ClassProperty(object):
+class ClassProperty:
+    """A custom class to turn a classmethod into a classproperty."""
     def __init__(self, fget: Callable[[Any], Any]) -> None:
         self.fget = fget
 
@@ -114,6 +116,7 @@ class ClassProperty(object):
 
 @enum.unique
 class TagClasses(enum.IntEnum):
+    """Available BER class tag components - the first two bits of the 8 bit tag."""
     UNIVERSAL = 0x00
     APPLICATION = 0x40
     CONTEXT = 0x80
@@ -121,12 +124,22 @@ class TagClasses(enum.IntEnum):
 
 
 class BERBase(metaclass=abc.ABCMeta):
+    """The base class of all BER (and therefore also all LDAP) objects."""
     _tag_class: TagClasses
     _tag_is_constructed: bool = False
     _tag: int
 
     @classmethod
     def __tag(cls) -> int:
+        """The tag of a class is dynamically constructed and available as class property.
+
+        The first two bits reflect the class of the tag (TagClasses), the third bit
+        states if the object is constructed (a sequence or a set) or not, and the
+        remaining five bits identify the object unambiguously in its context.
+
+        Note that only tags from the UNIVERSAL class are globally unique! Tags with
+        class CONTEXT may be identical between multiple classes, outside their context.
+        """
         constructed = 0x00
         if cls._tag_is_constructed:
             constructed = 0x20
@@ -151,9 +164,6 @@ class BERBase(metaclass=abc.ABCMeta):
             return NotImplemented
         return self.to_wire() != other.to_wire()
 
-    def __hash__(self) -> int:
-        return hash(self.to_wire())
-
     @abc.abstractmethod
     def __repr__(self) -> str:
         raise NotImplementedError
@@ -161,7 +171,7 @@ class BERBase(metaclass=abc.ABCMeta):
     @classmethod
     @abc.abstractmethod
     def from_wire(cls, content: bytes) -> "BERBase":
-        """Create an instance of this class from a binary string.
+        """Create an instance of this class from its binary representation.
 
         This is the default way an instance of this class will be created.
         """
@@ -169,7 +179,7 @@ class BERBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def to_wire(self) -> bytes:
-        """Encode the instance of this class to its binary value."""
+        """Encode the instance of this class to its binary representation."""
         raise NotImplementedError
 
 
@@ -183,9 +193,6 @@ class BERInteger(BERBase):
         return cls(ber2int(content))
 
     def __init__(self, value: int) -> None:
-        """Create a new BERInteger object.
-        value is an integer.
-        """
         self.integer = value
 
     def to_wire(self) -> bytes:
@@ -247,9 +254,6 @@ class BERBoolean(BERBase):
         return cls(bool(ber2int(content)))
 
     def __init__(self, value: bool) -> None:
-        """Create a new BERInteger object.
-        value is an integer.
-        """
         self.boolean = value
 
     def to_wire(self) -> bytes:

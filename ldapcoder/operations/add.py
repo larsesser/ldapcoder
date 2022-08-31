@@ -14,8 +14,19 @@ from ldapcoder.result import LDAPResult
 # AddRequest ::= [APPLICATION 8] SEQUENCE {
 #      entry           LDAPDN,
 #      attributes      AttributeList }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
+    """Add a new entry to the LDAP tree.
+
+    The server MUST ensure that the entry conform to user and system schema rules or
+    other data model constraints.
+
+    The entry MUST NOT exist and the parent entry MUST exist, otherwise the AddRequest
+    will fail.
+
+    The server SHALL NOT dereference any aliases in locating the entry to be added.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x08
     entry: DistinguishedName
@@ -45,6 +56,7 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
 
 
 # AddResponse ::= [APPLICATION 9] LDAPResult
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPAddResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION

@@ -8,12 +8,21 @@ from ldapcoder.result import ResultCodes
 
 
 class LDAPUnsolicitedNotification(LDAPMessage):
+    """A special kind of LDAPMessages which includes responses without former request.
+
+    This may be used to signal an extraordinary condition in the server or in the LDAP
+    session between the client and the server.
+    """
     def __init__(self, operation: LDAPExtendedResponse, **kwargs: Any):
         super().__init__(msg_id=0, operation=operation)
 
 
 @EXTENDED_RESPONSES.add
 class LDAPNoticeOfDisconnection(LDAPExtendedResponse):
+    """Note to the client that the server will terminate the LDAP session.
+
+    Defined in Sec. 4.4.1. [RFC4511].
+    """
     responseName = "1.3.6.1.4.1.1466.20036"
     responseValue = None
 

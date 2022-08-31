@@ -12,6 +12,11 @@ from ldapcoder.ldaputils import (
 
 # Referral ::= SEQUENCE SIZE (1..MAX) OF uri URI
 class LDAPReferral(BERSequence):
+    """Referrals are basically links to other servers.
+
+    They are send if the contacted server cannot or will not perform the requested
+    operation, but knows that one or more other servers may be able to do so.
+    """
     _tag_class = TagClasses.CONTEXT
     _tag = 0x03
     uris: List[str]
@@ -36,6 +41,7 @@ class LDAPReferral(BERSequence):
 
 @enum.unique
 class ResultCodes(enum.IntEnum):
+    """All LDAPResultCodes as defined in [RFC4511]."""
     success = 0
     operationsError = 1
     protocolError = 2
@@ -152,7 +158,16 @@ class LDAPResultCode(BEREnumerated):
 #      matchedDN          LDAPDN,
 #      diagnosticMessage  LDAPString,
 #      referral           [3] Referral OPTIONAL }
+# [RFC4511]
 class LDAPResult(LDAPProtocolResponse, BERSequence):
+    """Return success or failure indications to the client.
+
+    If more than one resultCode is suitable, the server will decide for one. Servers
+    may return substituted result codes to prevent unauthorized disclosures.
+
+    The diagnosticMessage field may be used to send additional free-text information
+    about the resultCode to the client. This is intended to be in humanreadable format.
+    """
     resultCode: ResultCodes
     matchedDN: DistinguishedName
     diagnosticMessage: str

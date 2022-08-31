@@ -18,6 +18,7 @@ from ldapcoder.result import LDAPResult
 
 @enum.unique
 class SearchScopes(enum.IntEnum):
+    """The SearchScopes as defined in Sec. 4.5.1.2. of [RFC4511]."""
     baseObject = 0
     singleLevel = 1
     wholeSubtree = 2
@@ -34,6 +35,7 @@ class LDAPSearchScope(BEREnumerated):
 
 @enum.unique
 class DerefAliases(enum.IntEnum):
+    """The DerefAliases as defined in Sec. 4.5.1.3. of [RFC4511]."""
     neverDerefAliases = 0
     derefInSearching = 1
     derefFindingBaseObj = 2
@@ -65,8 +67,10 @@ class LDAPDerefAlias(BEREnumerated):
 #      typesOnly       BOOLEAN,
 #      filter          Filter,
 #      attributes      AttributeSelection }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
+    """Query the server for entries matching the given search conditions."""
     _tag_class = TagClasses.APPLICATION
     _tag = 0x03
 
@@ -156,8 +160,10 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
 # SearchResultEntry ::= [APPLICATION 4] SEQUENCE {
 #      objectName      LDAPDN,
 #      attributes      PartialAttributeList }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
+    """Return one entry matching the specified search conditions."""
     _tag_class = TagClasses.APPLICATION
     _tag = 0x04
 
@@ -190,8 +196,13 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
 
 # SearchResultReference ::= [APPLICATION 19] SEQUENCE
 #             SIZE (1..MAX) OF uri URI
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
+    """References to other LDAPServers which hold one of the requested entries.
+
+    This works in analogy to LDAPReferrals.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x13
     uris: List[str]
@@ -215,6 +226,7 @@ class LDAPSearchResultReference(LDAPProtocolResponse, BERSequence):
 
 
 # SearchResultDone ::= [APPLICATION 5] LDAPResult
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPSearchResultDone(LDAPResult):
     _tag_class = TagClasses.APPLICATION

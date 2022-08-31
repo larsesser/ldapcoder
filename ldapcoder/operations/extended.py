@@ -26,8 +26,16 @@ class LDAPExtendedRequest_requestValue(BEROctetString):
 # ExtendedRequest ::= [APPLICATION 23] SEQUENCE {
 #      requestName      [0] LDAPOID,
 #      requestValue     [1] OCTET STRING OPTIONAL }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPExtendedRequest(LDAPProtocolRequest, BERSequence):
+    """Base class for all ExtendedRequest objects.
+
+    This is one of the core extension mechanism of LDAPv3.
+
+    Servers list the requestName of Extended Requests they recognize in the
+    'supportedExtension' attribute in the root DSE, see Sec 5.1. of [RFC4512].
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x17
     requestName: str
@@ -77,8 +85,10 @@ class LDAPExtendedResponse_requestValue(BEROctetString):
 #      COMPONENTS OF LDAPResult,
 #      responseName     [10] LDAPOID OPTIONAL,
 #      responseValue    [11] OCTET STRING OPTIONAL }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPExtendedResponse(LDAPResult):
+    """Base class for all ExtendedRequest objects."""
     _tag_class = TagClasses.APPLICATION
     _tag = 0x18
     responseName: Optional[str]
@@ -169,6 +179,12 @@ class LDAPExtendedResponse(LDAPResult):
 
 @EXTENDED_REQUESTS.add
 class LDAPStartTLSRequest(LDAPExtendedRequest):
+    """Request the server to establish a TLS connection.
+
+    Clients are advised to reject referrals from the StartTLS operation.
+
+    From Sec. 4.14.1 of [RFC4511].
+    """
     requestName = "1.3.6.1.4.1.1466.20037"
     requestValue = None
 
@@ -178,6 +194,10 @@ class LDAPStartTLSRequest(LDAPExtendedRequest):
 
 @EXTENDED_RESPONSES.add
 class LDAPStartTLSResponse(LDAPExtendedResponse):
+    """Response to a client requesting to establish a TLS connection.
+
+    From Sec. 4.14.1 of [RFC4511].
+    """
     responseName = "1.3.6.1.4.1.1466.20037"
     responseValue = None
 

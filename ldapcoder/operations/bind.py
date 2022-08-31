@@ -74,8 +74,14 @@ class LDAPBindRequest_SaslAuthentication(LDAPAuthenticationChoice, BERSequence):
 #      version                 INTEGER (1 ..  127),
 #      name                    LDAPDN,
 #      authentication          AuthenticationChoice }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
+    """Authentication attempt of the client to the server.
+
+    Note that the authentication process may be multi-stage processes, which include
+    multiple BindRequests and BindResponses to be sent to be complete.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x00
     version: int
@@ -123,8 +129,14 @@ class LDAPBindResponse_serverSaslCreds(BEROctetString):
 # BindResponse ::= [APPLICATION 1] SEQUENCE {
 #      COMPONENTS OF LDAPResult,
 #      serverSaslCreds    [7] OCTET STRING OPTIONAL }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPBindResponse(LDAPResult):
+    """Respond to a clients authentication Request.
+
+    Note that the authentication process may be multi-stage processes, which include
+    multiple BindRequests and BindResponses to be sent to be complete.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x01
     serverSaslCreds: Optional[bytes]

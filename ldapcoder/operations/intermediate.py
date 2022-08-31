@@ -21,8 +21,17 @@ class LDAPIntermediateResponse_responseValue(BEROctetString):
 # IntermediateResponse ::= [APPLICATION 25] SEQUENCE {
 #         responseName     [0] LDAPOID OPTIONAL,
 #         responseValue    [1] OCTET STRING OPTIONAL }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPIntermediateResponse(LDAPProtocolResponse, BERSequence):
+    """A general mechanism for defining single-request/multiple-response operations.
+
+    The IntermediateResponse message is intended to be used with Extended operations
+    or message controls.
+
+    IntermediateResponse messages SHALL NOT be returned to the client unless the client
+    issues a request that specifically solicits their return.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x19
     responseName: Optional[str]

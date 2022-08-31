@@ -2,16 +2,13 @@
 
 import abc
 import binascii
-import string
-from string import hexdigits as HEXDIGITS
+from string import hexdigits as HEXDIGITS, printable as PRINTABLE
 from typing import (
     TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Type,
     TypeVar, Union,
 )
 
-from ldapcoder.berutils import (
-    BERBase, BERInteger, BEROctetString, BERSequence, BERSet, berlen,
-)
+from ldapcoder.berutils import BERBase, BERInteger, BEROctetString, BERSequence, BERSet
 from ldapcoder.exceptions import DecodingError, EncodingError
 
 if TYPE_CHECKING:
@@ -32,7 +29,7 @@ def binary_escape(s: str) -> str:
 
 
 def smart_escape(s: str, threshold: float = 0.30) -> str:
-    binary_count = sum(c not in string.printable for c in s)
+    binary_count = sum(c not in PRINTABLE for c in s)
     if float(binary_count) / float(len(s)) > threshold:
         return binary_escape(s)
     return escape(s)
@@ -53,7 +50,9 @@ def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
 
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,
 #               -- [ISO10646] characters
+# [RFC4511]
 class LDAPString(BEROctetString):
+    """An utf-8 encoded string."""
     string: str
 
     @property  # type: ignore[override]
@@ -77,8 +76,6 @@ class LDAPString(BEROctetString):
             utf8 = content.decode("utf-8")
         except UnicodeDecodeError as e:
             raise DecodingError from e
-        # TODO should this be escaped or not?
-        # value = escape(utf8)
         return cls(utf8)
 
     def __init__(self, value: str):
@@ -136,11 +133,12 @@ class RelativeDistinguishedName:
     # - ... string, in hexstring representation
     # - ... LDAPAttribute object where AttributeDescription is a numericoid
     bytes_attributes: Dict[str, bytes]
-    # special character which need to be escaped if they occur in the attribute's value
+    # special characters which need to be escaped if they occur in the attribute's value
     _ESCAPE = "\\"
     _ESCAPED_LEADING = {"#", " "}
     _ESCAPED_EVERYWHERE = {'"', "+", ",", ";", "<", ">"}
     _ESCAPED_TRAILING = {" "}
+    # characters which need to be escaped as hex digits
     _ESCAPED_AS_HEX = {chr(0x00)}
 
     def __init__(self, raw: Union[str, "LDAPAttribute", Iterable["LDAPAttribute"]]) -> None:
@@ -433,7 +431,9 @@ def is_numericoid(value: str) -> bool:
 
 # LDAPOID ::= OCTET STRING -- Constrained to <numericoid>
 #            -- [RFC4512]
+# [RFC4511]
 class LDAPOID(BEROctetString):
+    """An object identifier in dotted decimal form."""
     oid: str
 
     @property  # type: ignore[override]
@@ -473,7 +473,16 @@ class LDAPAttributeValue(BEROctetString):
 
 # MessageID ::= INTEGER (0 ..  maxInt)
 # maxInt INTEGER ::= 2147483647 -- (2^^31 - 1) --
+# [RFC4511]
 class LDAPMessageId(BERInteger):
+    """The MessageId of an LDAPMessage is used to link Requests and Responses.
+
+    Therefore, the message id of any request MUST have a non-zero value different from
+    any other request in progress in the same LDAP session. The response messages of
+    the server to a given request will contain the message id of this request.
+
+    The zero message id is reserved for unsolicited notifications send by the server.
+    """
     message_id: int
 
     @property  # type: ignore[override]
@@ -566,7 +575,19 @@ class LDAPAttributeValueAssertion(BERSequence):
 # selectorspecial = noattrs / alluserattrs
 # noattrs = %x31.2E.31 ; "1.1"
 # alluserattrs = %x2A ; asterisk ("*")
+# see Sec. 4.5.1.8. of [RFC4511]
 class LDAPAttributeSelection(BERSequence):
+    """A selection list of attributes requested by an LDAPSearchRequest.
+
+    There are three special cases which may appear here:
+    1. An empty list with no attributes requests the return of all user attributes.
+    2. A list containing "*" (with zero or more attribute descriptions) requests the
+       return of all user attributes in addition to other listed (operational) attributes.
+    3. A list containing only the OID "1.1" indicates that no attributes are to be
+       returned.  If "1.1" is provided with other attributeSelector values, the "1.1"
+       attributeSelector is ignored. This OID was chosen because it does not (and can not)
+       correspond to any attribute in use.
+    """
     selectors: List[str]
 
     @classmethod
@@ -607,6 +628,7 @@ class LDAPAttributeValueSet(BERSet):
 # PartialAttribute ::= SEQUENCE {
 #      type       AttributeDescription,
 #      vals       SET OF value AttributeValue }
+# [RFC4511]
 class LDAPPartialAttribute(BERSequence):
     type_: str
     values: List[bytes]
@@ -637,6 +659,7 @@ class LDAPPartialAttribute(BERSequence):
 
 # PartialAttributeList ::= SEQUENCE OF
 #        partialAttribute PartialAttribute
+# [RFC4511]
 class LDAPPartialAttributeList(BERSequence):
     partial_attributes: List[LDAPPartialAttribute]
 
@@ -658,6 +681,7 @@ class LDAPPartialAttributeList(BERSequence):
 # Attribute ::= PartialAttribute(WITH COMPONENTS {
 #      ...,
 #      vals (SIZE(1..MAX))})
+# [RFC4511]
 class LDAPAttribute(LDAPPartialAttribute):
     def __init__(self, type_: str, values: List[bytes]):
         if len(values) == 0:
@@ -666,6 +690,7 @@ class LDAPAttribute(LDAPPartialAttribute):
 
 
 # AttributeList ::= SEQUENCE OF attribute Attribute
+# [RFC4511]
 class LDAPAttributeList(BERSequence):
     attributes: List[LDAPAttribute]
 

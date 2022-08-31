@@ -13,6 +13,7 @@ from ldapcoder.result import LDAPResult
 
 @enum.unique
 class ModifyOperations(enum.IntEnum):
+    """The ModifyOperations as defined in Sec. 4.6. of [RFC4511]."""
     add = 0
     delete = 1
     replace = 2
@@ -81,8 +82,21 @@ class LDAPModify_changes(BERSequence):
 #  replace (2),
 #  ...  },
 #           modification    PartialAttribute } }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
+    """Request to modify the object with the given changes.
+
+    Each change specifies via the operation enum if the modification should be added,
+    deleted or replaced for the object. Either all changes should be applied by the
+    server, or none (think of the ModifyRequest being in an atomized context).
+
+    The server MUST ensure that the entry conform to user and system schema rules or
+    other data model constraints after applying all changes.
+
+    The server SHALL NOT perform any alias dereferencing in determining the object to be
+    modified.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x06
     object: DistinguishedName
@@ -112,6 +126,7 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
 
 
 # ModifyResponse ::= [APPLICATION 7] LDAPResult
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPModifyResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION

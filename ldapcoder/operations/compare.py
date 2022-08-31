@@ -11,8 +11,13 @@ from ldapcoder.result import LDAPResult
 # CompareRequest ::= [APPLICATION 14] SEQUENCE {
 #      entry           LDAPDN,
 #      ava             AttributeValueAssertion }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
+    """Compare the ava against the entry, using the attribute's EQUALITY matching rule.
+
+    The server SHALL NOT dereference any aliases in locating the entry to be compared.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0E
 
@@ -43,6 +48,7 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
 
 
 # CompareResponse ::= [APPLICATION 15] LDAPResult
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPCompareResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION

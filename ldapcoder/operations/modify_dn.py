@@ -21,8 +21,21 @@ class LDAPModifyDNResponse_newSuperior(LDAPDN):
 #      newrdn          RelativeLDAPDN,
 #      deleteoldrdn    BOOLEAN,
 #      newSuperior     [0] LDAPDN OPTIONAL }
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
+    """Rename the RDN of an entry, and/or move a subtree of entries to a new location.
+
+    Note that the entry may have children (subordinates)!
+
+    If the new DN of the entry is already present, the operation will fail.
+
+    Servers MUST ensure that entries conform to user and system schema rules or other
+    data model constraints.
+
+    The server SHALL NOT dereference any aliases in locating the objects named in entry
+    or newSuperior.
+    """
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0C
 
@@ -69,6 +82,7 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
 
 
 # ModifyDNResponse ::= [APPLICATION 13] LDAPResult
+# [RFC4511]
 @PROTOCOL_OPERATIONS.add
 class LDAPModifyDNResponse(LDAPResult):
     _tag_class = TagClasses.APPLICATION

@@ -31,7 +31,12 @@ logger = logging.getLogger(__name__)
 #      approxMatch     [8] AttributeValueAssertion,
 #      extensibleMatch [9] MatchingRuleAssertion,
 #      ...  }
+# [RFC4511]
 class LDAPFilter(BERBase, metaclass=abc.ABCMeta):
+    """The base class of all filters, which may be sent in a LDAPSearchRequest.
+
+    Note that all filters may evaluate tristate: TRUE, FALSE and Undefined.
+    """
     _tag_class = TagClasses.CONTEXT
 
     @property
@@ -82,6 +87,10 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
 
 @FILTERS.add
 class LDAPFilter_and(LDAPFilterSet):
+    """One or more filters, connected via an AND.
+
+    See Sec. 4.5.1.7. of [RFC4511].
+    """
     _tag = 0x00
 
     @property
@@ -91,6 +100,10 @@ class LDAPFilter_and(LDAPFilterSet):
 
 @FILTERS.add
 class LDAPFilter_or(LDAPFilterSet):
+    """One or more filters, connected via OR.
+
+    See Sec. 4.5.1.7. of [RFC4511].
+    """
     _tag = 0x01
 
     @property
@@ -100,6 +113,10 @@ class LDAPFilter_or(LDAPFilterSet):
 
 @FILTERS.add
 class LDAPFilter_not(LDAPFilter):
+    """The negotiated version of the given filter.
+
+    See Sec. 4.5.1.7. of [RFC4511].
+    """
     _tag_is_constructed = True
     _tag = 0x02
     filter_: LDAPFilter
@@ -135,6 +152,10 @@ class LDAPFilter_not(LDAPFilter):
 
 @FILTERS.add
 class LDAPFilter_equalityMatch(LDAPFilter, LDAPAttributeValueAssertion):
+    """Check if the value of the attribute matches the given value via EQUALITY matching rule.
+
+    See Sec. 4.5.1.7.1. of [RFC4511].
+    """
     _tag = 0x03
 
     @property
@@ -217,6 +238,10 @@ class LDAP_substrings(BERSequence):
 #      }
 @FILTERS.add
 class LDAPFilter_substrings(LDAPFilter, BERSequence):
+    """Check if the value of the attribute matches the given substrings via SUBSTR matching rule.
+
+    See Sec. 4.5.1.7.2. of [RFC4511].
+    """
     _tag = 0x04
     type: str
     substrings: List[LDAPFilter_substrings_string]
@@ -267,6 +292,10 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
 
 @FILTERS.add
 class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
+    """Compare the value of the attribute to the given value via ORDERING matching rule.
+
+    See Sec. 4.5.1.7.3. of [RFC4511].
+    """
     _tag = 0x05
 
     @property
@@ -282,6 +311,10 @@ class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
 
 @FILTERS.add
 class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
+    """Compare the value of the attribute to the given value via ORDERING and EQUALITY matching rule.
+
+    See Sec. 4.5.1.7.4. of [RFC4511].
+    """
     _tag = 0x06
 
     @property
@@ -297,6 +330,10 @@ class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
 
 @FILTERS.add
 class LDAPFilter_present(LDAPFilter, LDAPAttributeDescription):
+    """Check if there is an attribute of the given AttributeDescription present in the entry.
+
+    See Sec. 4.5.1.7.5. of [RFC4511].
+    """
     _tag = 0x07
 
     @property
@@ -306,6 +343,10 @@ class LDAPFilter_present(LDAPFilter, LDAPAttributeDescription):
 
 @FILTERS.add
 class LDAPFilter_approxMatch(LDAPFilter, LDAPAttributeValueAssertion):
+    """Check if the value of the attribute matches the given value via a locally-defined matching algorithm.
+
+    See Sec. 4.5.1.7.6. of [RFC4511].
+    """
     _tag = 0x08
 
     @property
@@ -349,6 +390,7 @@ class LDAPMatchingRuleAssertion_dnAttributes(BERBoolean):
 #      type            [2] AttributeDescription OPTIONAL,
 #      matchValue      [3] AssertionValue,
 #      dnAttributes    [4] BOOLEAN DEFAULT FALSE }
+# [RFC4511]
 class LDAPMatchingRuleAssertion(BERSequence):
     matchingRule: Optional[str]
     type: Optional[str]
@@ -401,6 +443,8 @@ class LDAPMatchingRuleAssertion(BERSequence):
         dnAttributes: bool = None,
     ):
         self.matchingRule = matchingRule
+        if matchingRule is None and type_ is None:
+            raise ValueError("Type must be present if matchingRule is absent.")
         self.type = type_
         self.matchValue = matchValue
         self.dnAttributes = dnAttributes
@@ -430,6 +474,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
 
 @FILTERS.add
 class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
+    """See Sec. 4.5.1.7.7. of [RFC4511]."""
     _tag = 0x09
 
     def __init__(

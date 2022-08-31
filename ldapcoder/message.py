@@ -40,11 +40,9 @@ from ldapcoder.registry import (
 #           ...,
 #           intermediateResponse  IntermediateResponse },
 #      controls       [0] Controls OPTIONAL }
+# [RFC4511]
 class LDAPMessage(BERSequence):
-    """
-    To encode this object in order to be sent over the network use the to_wire()
-    method.
-    """
+    """The envelope to send all LDAP operations over the network."""
     msg_id: int
     operation: "LDAPProtocolOp"
     controls: Optional[List["LDAPControl"]]
@@ -105,6 +103,7 @@ class LDAPMessage(BERSequence):
 
 
 # Controls ::= SEQUENCE OF control Control
+# [RFC4511]
 class LDAPControls(BERSequence):
     _tag_class = TagClasses.CONTEXT
     _tag = 0x00
@@ -135,7 +134,16 @@ class LDAPControls(BERSequence):
 #      controlType             LDAPOID,
 #      criticality             BOOLEAN DEFAULT FALSE,
 #      controlValue            OCTET STRING OPTIONAL }
+# [RFC4511]
 class LDAPControl(BERSequence):
+    """Extend mechanism for arbitrary LDAPRequests and LDAPResponses.
+
+    Controls are considered optional. Whether the server deems an unrecognized,
+    unappropriated, or otherwise unfitting control for a given operation as an error
+    is controlled by the criticality bool: If it's True, the server MUST NOT perform the
+    operation and return a resultMessage with resultCode unavailableCriticalExtension.
+    Otherwise, the server MUST ignore the control entirely.
+    """
     controlType: str
     criticality: Optional[bool]
     controlValue: Optional[bytes]
