@@ -9,7 +9,7 @@ from ldapcoder.berutils import (
 from ldapcoder.exceptions import UnknownTagError
 from ldapcoder.filter import LDAPFilter
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPURI, LDAPAttributeSelection, LDAPPartialAttribute,
+    LDAPDN, LDAPURI, DistinguishedName, LDAPAttributeSelection, LDAPPartialAttribute,
     LDAPPartialAttributeList, LDAPProtocolRequest, LDAPProtocolResponse, decode,
 )
 from ldapcoder.registry import FILTERS, PROTOCOL_OPERATIONS
@@ -70,7 +70,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x03
 
-    baseObject: str
+    baseObject: DistinguishedName
     scope: SearchScopes
     derefAliases: DerefAliases
     sizeLimit: int
@@ -87,7 +87,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
         if len(vals) > 8:
             cls.handle_additional_vals(vals[8:])
 
-        baseObject = decode(vals[0], LDAPDN).string
+        baseObject = decode(vals[0], LDAPDN).dn
         scope = decode(vals[1], LDAPSearchScope).member
         derefAlias = decode(vals[2], LDAPDerefAlias).member
         sizeLimit = decode(vals[3], BERInteger).integer
@@ -114,7 +114,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
 
     def __init__(
         self,
-        baseObject: str,
+        baseObject: DistinguishedName,
         scope: SearchScopes,
         derefAliases: DerefAliases,
         sizeLimit: int,
@@ -161,7 +161,7 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x04
 
-    objectName: str
+    objectName: DistinguishedName
     attributes: List[LDAPPartialAttribute]
 
     @classmethod
@@ -171,11 +171,11 @@ class LDAPSearchResultEntry(LDAPProtocolResponse, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        objectName = decode(vals[0], LDAPDN).string
+        objectName = decode(vals[0], LDAPDN).dn
         attributes = decode(vals[1], LDAPPartialAttributeList).partial_attributes
         return cls(objectName=objectName, attributes=attributes)
 
-    def __init__(self, objectName: str, attributes: List[LDAPPartialAttribute]):
+    def __init__(self, objectName: DistinguishedName, attributes: List[LDAPPartialAttribute]):
         self.objectName = objectName
         self.attributes = attributes
 

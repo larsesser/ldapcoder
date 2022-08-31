@@ -5,7 +5,8 @@ from typing import List, Optional, Type
 
 from ldapcoder.berutils import BERBase, BEREnumerated, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPURI, LDAPException, LDAPProtocolResponse, LDAPString, decode,
+    LDAPDN, LDAPURI, DistinguishedName, LDAPException, LDAPProtocolResponse, LDAPString,
+    decode,
 )
 
 
@@ -153,7 +154,7 @@ class LDAPResultCode(BEREnumerated):
 #      referral           [3] Referral OPTIONAL }
 class LDAPResult(LDAPProtocolResponse, BERSequence):
     resultCode: ResultCodes
-    matchedDN: str
+    matchedDN: DistinguishedName
     diagnosticMessage: str
     referral: Optional[List[str]]
 
@@ -166,7 +167,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
             cls.handle_additional_vals(vals[4:])
 
         resultCode = decode(vals[0], LDAPResultCode).member
-        matchedDN = decode(vals[1], LDAPDN).string
+        matchedDN = decode(vals[1], LDAPDN).dn
         diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
@@ -181,7 +182,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         )
         return r
 
-    def __init__(self, resultCode: ResultCodes, matchedDN: str, diagnosticMessage: str,
+    def __init__(self, resultCode: ResultCodes, matchedDN: DistinguishedName, diagnosticMessage: str,
                  referral: List[str] = None):
         # the referral result code is set iff there are referrals
         if (resultCode is resultCode.referral and referral is None

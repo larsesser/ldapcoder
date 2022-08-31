@@ -4,7 +4,9 @@ from typing import Any, List, Optional
 
 from ldapcoder.berutils import BERBase, BEROctetString, BERSequence, TagClasses
 from ldapcoder.exceptions import DuplicateTagReceivedError
-from ldapcoder.ldaputils import LDAPDN, LDAPOID, LDAPProtocolRequest, LDAPString, decode
+from ldapcoder.ldaputils import (
+    LDAPDN, LDAPOID, DistinguishedName, LDAPProtocolRequest, LDAPString, decode,
+)
 from ldapcoder.registry import (
     EXTENDED_REQUESTS, EXTENDED_RESPONSES, PROTOCOL_OPERATIONS,
 )
@@ -89,7 +91,7 @@ class LDAPExtendedResponse(LDAPResult):
             cls.handle_missing_vals(vals)
 
         resultCode = decode(vals[0], LDAPResultCode).member
-        matchedDN = decode(vals[1], LDAPDN).string
+        matchedDN = decode(vals[1], LDAPDN).dn
         diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
@@ -127,7 +129,7 @@ class LDAPExtendedResponse(LDAPResult):
     def __init__(
         self,
         resultCode: ResultCodes,
-        matchedDN: str,
+        matchedDN: DistinguishedName,
         diagnosticMessage: str,
         referral: List[str] = None,
         responseName: str = None,
@@ -182,7 +184,7 @@ class LDAPStartTLSResponse(LDAPExtendedResponse):
     def __init__(self, resultCode: ResultCodes, diagnosticMessage: str, **kwargs: Any):
         super().__init__(
             resultCode=resultCode,
-            matchedDN="",
+            matchedDN=DistinguishedName(""),
             diagnosticMessage=diagnosticMessage,
             referral=None,
             responseName=self.responseName,

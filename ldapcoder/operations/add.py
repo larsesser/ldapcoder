@@ -4,7 +4,8 @@ from typing import List
 
 from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPAttribute, LDAPAttributeList, LDAPProtocolRequest, decode,
+    LDAPDN, DistinguishedName, LDAPAttribute, LDAPAttributeList, LDAPProtocolRequest,
+    decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -17,7 +18,7 @@ from ldapcoder.result import LDAPResult
 class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x08
-    entry: str
+    entry: DistinguishedName
     attributes: List[LDAPAttribute]
 
     @classmethod
@@ -27,11 +28,11 @@ class LDAPAddRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        entry = decode(vals[0], LDAPDN).string
+        entry = decode(vals[0], LDAPDN).dn
         attributes = decode(vals[1], LDAPAttributeList).attributes
         return cls(entry=entry, attributes=attributes)
 
-    def __init__(self, entry: str, attributes: List[LDAPAttribute]):
+    def __init__(self, entry: DistinguishedName, attributes: List[LDAPAttribute]):
         self.entry = entry
         self.attributes = attributes
 

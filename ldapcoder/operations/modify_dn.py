@@ -3,7 +3,10 @@
 from typing import List, Optional
 
 from ldapcoder.berutils import BERBase, BERBoolean, BERSequence, TagClasses
-from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPRelativeDN, decode
+from ldapcoder.ldaputils import (
+    LDAPDN, DistinguishedName, LDAPProtocolRequest, LDAPRelativeDN,
+    RelativeDistinguishedName, decode,
+)
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
 
@@ -23,10 +26,10 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0C
 
-    entry: str
-    newrdn: str
+    entry: DistinguishedName
+    newrdn: RelativeDistinguishedName
     deleteoldrdn: bool
-    newSuperior: Optional[str]
+    newSuperior: Optional[DistinguishedName]
 
     @classmethod
     def from_wire(cls, content: bytes) -> "LDAPModifyDNRequest":
@@ -36,15 +39,16 @@ class LDAPModifyDNRequest(LDAPProtocolRequest, BERSequence):
         if len(vals) > 4:
             cls.handle_additional_vals(vals[4:])
 
-        entry = decode(vals[0], LDAPDN).string
-        newrdn = decode(vals[1], LDAPRelativeDN).string
+        entry = decode(vals[0], LDAPDN).dn
+        newrdn = decode(vals[1], LDAPRelativeDN).rdn
         deleteoldrdn = decode(vals[2], BERBoolean).boolean
         newSuperior = None
         if len(vals) >= 4:
-            newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).string
+            newSuperior = decode(vals[3], LDAPModifyDNResponse_newSuperior).dn
         return cls(entry=entry, newrdn=newrdn, deleteoldrdn=deleteoldrdn, newSuperior=newSuperior)
 
-    def __init__(self, entry: str, newrdn: str, deleteoldrdn: bool, newSuperior: str = None):
+    def __init__(self, entry: DistinguishedName, newrdn: RelativeDistinguishedName,
+                 deleteoldrdn: bool, newSuperior: DistinguishedName = None):
         self.entry = entry
         self.newrdn = newrdn
         self.deleteoldrdn = deleteoldrdn

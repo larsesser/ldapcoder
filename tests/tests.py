@@ -25,7 +25,7 @@ from ldapcoder.filter import (
 )
 from ldapcoder.ldaputils import (
     DistinguishedName, LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
-    LDAPProtocolOp, escaped_split,
+    LDAPProtocolOp, RelativeDistinguishedName,
 )
 from ldapcoder.message import LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
@@ -233,7 +233,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=3, operation=LDAPAddResponse(
-            ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -266,7 +266,7 @@ class MyTests(unittest.TestCase):
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        matchedDN = "ou=People, dc=example, dc=com"
+        matchedDN = DistinguishedName("ou=People, dc=example, dc=com")
         diagnosticMessage = ("Entry uid=missing1, ou=missing2, ou=People, dc=example,"
                              " dc=com cannot be created because its parent does not exist.")
         expectation = LDAPMessage(msg_id=3, operation=LDAPAddResponse(
@@ -315,8 +315,8 @@ class MyTests(unittest.TestCase):
             "ldap://alternate1.example.com:389/uid=jdoe,ou=Remote,dc=example,dc=com",
             "ldap://alternate2.example.com:389/uid=jdoe,ou=Remote,dc=example,dc=com"]
         expectation = LDAPMessage(msg_id=3, operation=LDAPAddResponse(
-            ResultCodes.referral, matchedDN="", diagnosticMessage=diagnosticMessage,
-            referral=referral))
+            ResultCodes.referral, matchedDN=DistinguishedName(""),
+            diagnosticMessage=diagnosticMessage, referral=referral))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -358,7 +358,7 @@ class MyTests(unittest.TestCase):
 
         attributes = [LDAPAttribute(type_="objectClass", values=[b"top", b"domain"]),
                       LDAPAttribute(type_="dc", values=[b"example"])]
-        add = LDAPAddRequest(entry="dc=example,dc=com", attributes=attributes)
+        add = LDAPAddRequest(entry=DistinguishedName("dc=example,dc=com"), attributes=attributes)
         expectation = LDAPMessage(msg_id=2, operation=add)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -376,7 +376,8 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPAddResponse(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""),
+            diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -394,7 +395,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="", auth=LDAPBindRequest_SimpleAuthentication(b"")))
+            version=3, name=DistinguishedName(""), auth=LDAPBindRequest_SimpleAuthentication(b"")))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -417,7 +418,7 @@ class MyTests(unittest.TestCase):
 
         auth = LDAPBindRequest_SimpleAuthentication(b"secret123")
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="uid=jdoe,ou=People,dc=example,dc=com", auth=auth))
+            version=3, name=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"), auth=auth))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -434,7 +435,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindResponse(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -454,7 +455,7 @@ class MyTests(unittest.TestCase):
 
         auth = LDAPBindRequest_SaslAuthentication(mechanism="CRAM-MD5")
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindRequest(
-            version=3, dn="", auth=auth))
+            version=3, name=DistinguishedName(""), auth=auth))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case1), result.to_wire())
 
@@ -479,7 +480,7 @@ class MyTests(unittest.TestCase):
         auth = LDAPBindRequest_SaslAuthentication(
             mechanism="CRAM-MD5", credentials=b"u:jdoe d52116c87c31d9cc747600f9486d2a1d")
         expectation = LDAPMessage(msg_id=2, operation=LDAPBindRequest(
-            version=3, dn="", auth=auth))
+            version=3, name=DistinguishedName(""), auth=auth))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case2), result.to_wire())
 
@@ -501,8 +502,8 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=1, operation=LDAPBindResponse(
-            resultCode=ResultCodes.saslBindInProgress, matchedDN="", diagnosticMessage="",
-            serverSaslCreds=b"<10a13c7bf708ca0f399ca99e927da88b>"))
+            resultCode=ResultCodes.saslBindInProgress, matchedDN=DistinguishedName(""),
+            diagnosticMessage="", serverSaslCreds=b"<10a13c7bf708ca0f399ca99e927da88b>"))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -526,7 +527,7 @@ class MyTests(unittest.TestCase):
 
         ava = LDAPAttributeValueAssertion(attributeDesc="employeeType", assertionValue=b"salaried")
         expectation = LDAPMessage(msg_id=2, operation=LDAPCompareRequest(
-            entry="uid=jdoe,ou=People,dc=example,dc=com", ava=ava))
+            entry=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"), ava=ava))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -543,7 +544,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPCompareResponse(
-            resultCode=ResultCodes.compareTrue, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.compareTrue, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -578,7 +579,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPDelResponse(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -690,8 +691,9 @@ class MyTests(unittest.TestCase):
         change3 = LDAPModify_change(
             operation=ModifyOperations.replace,
             modification=LDAPPartialAttribute(type_="cn", values=[b"Jonathan Doe"]))
-        operation = LDAPModifyRequest(object_="uid=jdoe,ou=People,dc=example,dc=com",
-                                      changes=[change1, change2, change3])
+        operation = LDAPModifyRequest(
+            object_=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"),
+            changes=[change1, change2, change3])
         expectation = LDAPMessage(msg_id=2, operation=operation)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -709,7 +711,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPModifyResponse(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -731,7 +733,8 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPModifyDNRequest(
-            entry="uid=jdoe,ou=People,dc=example,dc=com", newrdn="uid=john.doe", deleteoldrdn=True))
+            entry=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"),
+            newrdn=RelativeDistinguishedName("uid=john.doe"), deleteoldrdn=True))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -757,8 +760,9 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=3, operation=LDAPModifyDNRequest(
-            entry="uid=john.doe,ou=People,dc=example,dc=com", newrdn="uid=john.doe",
-            deleteoldrdn=False, newSuperior="ou=Users,dc=example,dc=com"))
+            entry=DistinguishedName("uid=john.doe,ou=People,dc=example,dc=com"),
+            newrdn=RelativeDistinguishedName("uid=john.doe"), deleteoldrdn=False,
+            newSuperior=DistinguishedName("ou=Users,dc=example,dc=com")))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -784,8 +788,9 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPModifyDNRequest(
-            entry="uid=jdoe,ou=People,dc=example,dc=com", newrdn="uid=john.doe",
-            deleteoldrdn=True, newSuperior="ou=Users,dc=example,dc=com"))
+            entry=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"),
+            newrdn=RelativeDistinguishedName("uid=john.doe"), deleteoldrdn=True,
+            newSuperior=DistinguishedName("ou=Users,dc=example,dc=com")))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -802,7 +807,7 @@ class MyTests(unittest.TestCase):
         result = LDAPMessage.from_wire(content)
 
         expectation = LDAPMessage(msg_id=2, operation=LDAPModifyDNResponse(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage=""))
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage=""))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -1082,7 +1087,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         attributes = ["*", "+"]
         filter_ = LDAPFilter_and([filter1, filter2])
         operation = LDAPSearchRequest(
-            baseObject="dc=example,dc=com", scope=SearchScopes.wholeSubtree,
+            baseObject=DistinguishedName("dc=example,dc=com"), scope=SearchScopes.wholeSubtree,
             derefAliases=DerefAliases.neverDerefAliases, sizeLimit=1000, timeLimit=30,
             typesOnly=False, filter_=filter_, attributes=attributes)
         expectation = LDAPMessage(msg_id=2, operation=operation)
@@ -1115,7 +1120,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         attribute1 = LDAPPartialAttribute(type_="objectClass", values=[b"top", b"domain"])
         attribute2 = LDAPPartialAttribute(type_="dc", values=[b"example"])
         operation = LDAPSearchResultEntry(
-            objectName="dc=example,dc=com", attributes=[attribute1, attribute2])
+            objectName=DistinguishedName("dc=example,dc=com"), attributes=[attribute1, attribute2])
         expectation = LDAPMessage(msg_id=2, operation=operation)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -1143,7 +1148,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         attribute1 = LDAPPartialAttribute(type_="objectClass", values=[])
         attribute2 = LDAPPartialAttribute(type_="dc", values=[])
         operation = LDAPSearchResultEntry(
-            objectName="dc=example,dc=com", attributes=[attribute1, attribute2])
+            objectName=DistinguishedName("dc=example,dc=com"), attributes=[attribute1, attribute2])
         expectation = LDAPMessage(msg_id=2, operation=operation)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -1191,7 +1196,7 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         result = LDAPMessage.from_wire(content)
 
         operation = LDAPSearchResultDone(
-            resultCode=ResultCodes.success, matchedDN="", diagnosticMessage="")
+            resultCode=ResultCodes.success, matchedDN=DistinguishedName(""), diagnosticMessage="")
         expectation = LDAPMessage(msg_id=2, operation=operation)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())

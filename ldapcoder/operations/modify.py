@@ -5,7 +5,7 @@ from typing import List, Type
 
 from ldapcoder.berutils import BEREnumerated, BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPPartialAttribute, LDAPProtocolRequest, decode,
+    LDAPDN, DistinguishedName, LDAPPartialAttribute, LDAPProtocolRequest, decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -85,7 +85,7 @@ class LDAPModify_changes(BERSequence):
 class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x06
-    object: str
+    object: DistinguishedName
     changes: List[LDAPModify_change]
 
     @classmethod
@@ -95,11 +95,11 @@ class LDAPModifyRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        object_ = decode(vals[0], LDAPDN).string
+        object_ = decode(vals[0], LDAPDN).dn
         changes = decode(vals[1], LDAPModify_changes).changes
         return cls(object_=object_, changes=changes)
 
-    def __init__(self, object_: str, changes: List[LDAPModify_change]):
+    def __init__(self, object_: DistinguishedName, changes: List[LDAPModify_change]):
         self.object = object_
         self.changes = changes
 

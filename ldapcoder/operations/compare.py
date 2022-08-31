@@ -2,7 +2,7 @@
 
 from ldapcoder.berutils import BERSequence, TagClasses
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPAttributeValueAssertion, LDAPProtocolRequest, decode,
+    LDAPDN, DistinguishedName, LDAPAttributeValueAssertion, LDAPProtocolRequest, decode,
 )
 from ldapcoder.registry import PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPResult
@@ -16,7 +16,7 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x0E
 
-    entry: str
+    entry: DistinguishedName
     ava: LDAPAttributeValueAssertion
 
     @classmethod
@@ -26,11 +26,11 @@ class LDAPCompareRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        entry = decode(vals[0], LDAPDN).string
+        entry = decode(vals[0], LDAPDN).dn
         ava = decode(vals[1], LDAPAttributeValueAssertion)
         return cls(entry=entry, ava=ava)
 
-    def __init__(self, entry: str, ava: LDAPAttributeValueAssertion):
+    def __init__(self, entry: DistinguishedName, ava: LDAPAttributeValueAssertion):
         self.entry = entry
         self.ava = ava
 

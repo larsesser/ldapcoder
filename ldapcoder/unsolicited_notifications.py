@@ -1,5 +1,6 @@
 from typing import Any
 
+from ldapcoder.ldaputils import DistinguishedName
 from ldapcoder.message import LDAPMessage
 from ldapcoder.operations.extended import LDAPExtendedResponse
 from ldapcoder.registry import EXTENDED_RESPONSES
@@ -19,7 +20,7 @@ class LDAPNoticeOfDisconnection(LDAPExtendedResponse):
     def __init__(self, resultCode: ResultCodes, diagnosticMessage: str, **kwargs: Any):
         super().__init__(
             resultCode=resultCode,
-            matchedDN="",
+            matchedDN=DistinguishedName(""),
             diagnosticMessage=diagnosticMessage,
             referral=None,
             responseName=self.responseName,

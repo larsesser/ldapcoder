@@ -7,7 +7,9 @@ from ldapcoder.berutils import (
     BERBase, BERInteger, BEROctetString, BERSequence, TagClasses,
 )
 from ldapcoder.exceptions import DuplicateTagReceivedError, UnknownTagError
-from ldapcoder.ldaputils import LDAPDN, LDAPProtocolRequest, LDAPString, decode
+from ldapcoder.ldaputils import (
+    LDAPDN, DistinguishedName, LDAPProtocolRequest, LDAPString, decode,
+)
 from ldapcoder.registry import AUTHENTICATION_CHOICES, PROTOCOL_OPERATIONS
 from ldapcoder.result import LDAPReferral, LDAPResult, LDAPResultCode, ResultCodes
 
@@ -77,7 +79,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
     _tag_class = TagClasses.APPLICATION
     _tag = 0x00
     version: int
-    dn: str
+    name: DistinguishedName
     auth: LDAPAuthenticationChoice
 
     @classmethod
@@ -89,7 +91,7 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
             cls.handle_additional_vals(vals[3:])
 
         version = decode(vals[0], BERInteger).integer
-        dn = decode(vals[1], LDAPDN).string
+        name = decode(vals[1], LDAPDN).dn
 
         auth_tag, auth_content = vals[2]
         if auth_tag not in AUTHENTICATION_CHOICES:
@@ -97,19 +99,19 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         auth = AUTHENTICATION_CHOICES[auth_tag].from_wire(auth_content)
         assert isinstance(auth, LDAPAuthenticationChoice)
 
-        r = cls(version=version, dn=dn, auth=auth)
+        r = cls(version=version, name=name, auth=auth)
         return r
 
-    def __init__(self, version: int, dn: str, auth: LDAPAuthenticationChoice):
+    def __init__(self, version: int, name: DistinguishedName, auth: LDAPAuthenticationChoice):
         self.version = version
-        self.dn = dn
+        self.name = name
         self.auth = auth
 
     def to_wire(self) -> bytes:
-        return self.wrap([BERInteger(self.version), LDAPDN(self.dn), self.auth])
+        return self.wrap([BERInteger(self.version), LDAPDN(self.name), self.auth])
 
     def __repr__(self) -> str:
-        attributes = [f"version={self.version}", f"dn={self.dn}", f"auth={self.auth!r}"]
+        attributes = [f"version={self.version}", f"dn={self.name}", f"auth={self.auth!r}"]
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
@@ -134,7 +136,7 @@ class LDAPBindResponse(LDAPResult):
             cls.handle_missing_vals(vals)
 
         resultCode = decode(vals[0], LDAPResultCode).member
-        matchedDN = decode(vals[1], LDAPDN).string
+        matchedDN = decode(vals[1], LDAPDN).dn
         diagnosticMessage = decode(vals[2], LDAPString).string
 
         referral = None
@@ -166,7 +168,7 @@ class LDAPBindResponse(LDAPResult):
     def __init__(
         self,
         resultCode: ResultCodes,
-        matchedDN: str,
+        matchedDN: DistinguishedName,
         diagnosticMessage: str,
         referral: List[str] = None,
         serverSaslCreds: bytes = None,

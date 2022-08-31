@@ -362,13 +362,59 @@ class DistinguishedName:
 # hexstring = SHARP 1*hexpair
 # hexpair = HEX HEX
 class LDAPDN(LDAPString):
-    pass
+    dn: DistinguishedName
+
+    @property  # type: ignore[override]
+    def string(self) -> str:  # type: ignore[override]
+        return self.dn.string
+
+    @string.setter
+    def string(self, value: str) -> None:
+        self.dn = DistinguishedName(value)
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPDN":
+        try:
+            utf8 = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
+        try:
+            dn = DistinguishedName(utf8)
+        except ValueError as e:
+            raise DecodingError from e
+        return cls(dn)
+
+    def __init__(self, value: DistinguishedName):
+        super().__init__(value.string)
 
 
 # RelativeLDAPDN ::= LDAPString
 #      -- Constrained to <name-component> [RFC4514]
 class LDAPRelativeDN(LDAPString):
-    pass
+    rdn: RelativeDistinguishedName
+
+    @property  # type: ignore[override]
+    def string(self) -> str:  # type: ignore[override]
+        return self.rdn.string
+
+    @string.setter
+    def string(self, value: str) -> None:
+        self.rdn = RelativeDistinguishedName(value)
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPRelativeDN":
+        try:
+            utf8 = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
+        try:
+            rdn = RelativeDistinguishedName(utf8)
+        except ValueError as e:
+            raise DecodingError from e
+        return cls(rdn)
+
+    def __init__(self, value: RelativeDistinguishedName):
+        super().__init__(value.string)
 
 
 # URI ::= LDAPString     -- limited to characters permitted in URIs
