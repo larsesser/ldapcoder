@@ -310,7 +310,10 @@ class DistinguishedName:
         raw: Union[str, RelativeDistinguishedName, Sequence[RelativeDistinguishedName]]
     ) -> None:
         self.rdns = []
-        if isinstance(raw, str):
+        # the empty string is a valid DN
+        if raw == "":
+            pass
+        elif isinstance(raw, str):
             self.rdns.extend(
                 RelativeDistinguishedName(rdn) for rdn in escaped_split(raw, delim=","))
         elif isinstance(raw, RelativeDistinguishedName):
