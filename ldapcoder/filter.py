@@ -56,8 +56,7 @@ class LDAPFilterSet(LDAPFilter, BERSet, metaclass=abc.ABCMeta):
             if filter_tag not in FILTERS:
                 raise UnknownTagError(filter_tag)
             filters.append(FILTERS[filter_tag].from_wire(filter_content))
-        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
-        return cls(filters)  # type: ignore[arg-type]
+        return cls(filters)
 
     def __init__(self, filters: List[LDAPFilter]):
         # TODO is this behaviour changed by a follow up RFC?
@@ -131,8 +130,6 @@ class LDAPFilter_not(LDAPFilter):
         if filter_tag not in FILTERS:
             raise UnknownTagError(filter_tag)
         value = FILTERS[filter_tag].from_wire(filter_content)
-        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
-        assert isinstance(value, LDAPFilter)
         return cls(value)
 
     def __init__(self, value: LDAPFilter):
@@ -173,10 +170,6 @@ class LDAPFilter_equalityMatch(LDAPFilter, LDAPAttributeValueAssertion):
 class LDAPFilter_substrings_string(LDAPAssertionValue):
     _tag_class = TagClasses.CONTEXT
 
-    @classmethod
-    def from_wire(cls, content: bytes) -> "LDAPFilter_substrings_string":
-        return super().from_wire(content)  # type: ignore[return-value]
-
     @property
     def as_text(self) -> str:
         return escape(self.bytes_.decode("utf-8"))
@@ -201,13 +194,13 @@ class LDAP_substrings(BERSequence):
     substrings: List[LDAPFilter_substrings_string]
 
     @classmethod
-    def from_wire(cls, content: bytes) -> "BERBase":
+    def from_wire(cls, content: bytes) -> "LDAP_substrings":
         vals = cls.unwrap(content)
         substrings = []
-        for substring_tag, substring_content in vals:
-            if substring_tag not in SUBSTRINGS:
-                raise UnknownTagError(substring_tag)
-            substring = SUBSTRINGS[substring_tag].from_wire(substring_content)
+        for sub_tag, sub_content in vals:
+            if sub_tag not in SUBSTRINGS:
+                raise UnknownTagError(sub_tag)
+            substring = decode((sub_tag, sub_content), SUBSTRINGS[sub_tag])
             substrings.append(substring)
         return cls(value=substrings)
 

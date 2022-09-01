@@ -35,17 +35,15 @@ def smart_escape(s: str, threshold: float = 0.30) -> str:
     return escape(s)
 
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BERBase)
 
 
 def decode(input_: Tuple[int, bytes], class_: Type[T]) -> T:
     """Decode a (tag, content) tuple into an instance of the given BER class."""
     tag, content = input_
-    assert issubclass(class_, BERBase)
     if tag != class_.tag:
         raise DecodingError(f"Expected tag {class_.tag}, got {tag} instead.")
-    # TODO can we show mypy that T is always a subclass of BERBase?
-    return class_.from_wire(content)  # type: ignore[return-value]
+    return class_.from_wire(content)
 
 
 # LDAPString ::= OCTET STRING -- UTF-8 encoded,

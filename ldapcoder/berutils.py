@@ -17,7 +17,7 @@
 import abc
 import enum
 import logging
-from typing import Any, Callable, List, Sequence, Tuple, Type
+from typing import Any, Callable, List, Sequence, Tuple, Type, TypeVar
 
 from ldapcoder.exceptions import DecodingError, EncodingError, InsufficientDataError
 
@@ -123,6 +123,9 @@ class TagClasses(enum.IntEnum):
     PRIVATE = 0xC0
 
 
+T = TypeVar("T", bound="BERBase")
+
+
 class BERBase(metaclass=abc.ABCMeta):
     """The base class of all BER (and therefore also all LDAP) objects."""
     _tag_class: TagClasses
@@ -170,7 +173,7 @@ class BERBase(metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_wire(cls, content: bytes) -> "BERBase":
+    def from_wire(cls: Type[T], content: bytes) -> T:
         """Create an instance of this class from its binary representation.
 
         This is the default way an instance of this class will be created.

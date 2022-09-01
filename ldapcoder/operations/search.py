@@ -100,9 +100,7 @@ class LDAPSearchRequest(LDAPProtocolRequest, BERSequence):
         filter_tag, filter_content = vals[6]
         if filter_tag not in FILTERS:
             raise UnknownTagError(filter_tag)
-        # the from_wire method returns BERBase objects, but we know they are LDAPFilters
         filter_ = FILTERS[filter_tag].from_wire(filter_content)
-        assert isinstance(filter_, LDAPFilter)
         attributes = decode(vals[7], LDAPAttributeSelection).selectors
 
         return cls(

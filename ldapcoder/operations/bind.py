@@ -103,7 +103,6 @@ class LDAPBindRequest(LDAPProtocolRequest, BERSequence):
         if auth_tag not in AUTHENTICATION_CHOICES:
             raise UnknownTagError(auth_tag)
         auth = AUTHENTICATION_CHOICES[auth_tag].from_wire(auth_content)
-        assert isinstance(auth, LDAPAuthenticationChoice)
 
         r = cls(version=version, name=name, auth=auth)
         return r

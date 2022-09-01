@@ -75,7 +75,6 @@ class LDAPMessage(BERSequence):
               and operation.responseName is not None
               and operation.responseName in INTERMEDIATE_RESPONSES):
             operation = INTERMEDIATE_RESPONSES[operation.responseName].from_wire(operation_content)
-        assert isinstance(operation, LDAPProtocolOp)
 
         controls = None
         if len(vals) >= 3:
