@@ -159,7 +159,7 @@ class LDAPFilter_equalityMatch(LDAPFilter, LDAPAttributeValueAssertion):
     def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc
+            + self.description.string
             + "="
             # TODO is this assumption reasonable? Same question for the following cases.
             + escape(self.assertionValue.decode("utf-8"))
@@ -236,7 +236,7 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
     See Sec. 4.5.1.7.2. of [RFC4511].
     """
     _tag = 0x04
-    type: str
+    description: LDAPAttributeDescription
     substrings: List[LDAPFilter_substrings_string]
 
     @classmethod
@@ -247,20 +247,20 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
 
-        type_ = decode(vals[0], LDAPAttributeDescription).string
+        description = decode(vals[0], LDAPAttributeDescription)
         substrings = decode(vals[1], LDAP_substrings).substrings
-        return cls(type_=type_, substrings=substrings)
+        return cls(description=description, substrings=substrings)
 
-    def __init__(self, type_: str, substrings: List[LDAPFilter_substrings_string]):
-        self.type = type_
+    def __init__(self, description: LDAPAttributeDescription, substrings: List[LDAPFilter_substrings_string]):
+        self.description = description
         # do validation
         self.substrings = LDAP_substrings(substrings).substrings
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPAttributeDescription(self.type), LDAP_substrings(self.substrings)])
+        return self.wrap([self.description, LDAP_substrings(self.substrings)])
 
     def __repr__(self) -> str:
-        attributes = [f"type={self.type}", f"substrings={self.substrings!r}"]
+        attributes = [f"description={self.description!r}", f"substrings={self.substrings!r}"]
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
     @property
@@ -280,7 +280,7 @@ class LDAPFilter_substrings(LDAPFilter, BERSequence):
                 # TODO error more gracefully?
                 raise NotImplementedError(f"Filter type not supported: {string!r}")
 
-        return "(" + self.type + "=" + "*".join([initial_string, *any_string, final_string]) + ")"
+        return f"({self.description.string}={'*'.join([initial_string, *any_string, final_string])})"
 
 
 @FILTERS.add
@@ -295,7 +295,7 @@ class LDAPFilter_greaterOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc
+            + self.description.string
             + ">="
             + escape(self.assertionValue.decode("utf-8"))
             + ")"
@@ -314,7 +314,7 @@ class LDAPFilter_lessOrEqual(LDAPFilter, LDAPAttributeValueAssertion):
     def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc
+            + self.description.string
             + "<="
             + escape(self.assertionValue.decode("utf-8"))
             + ")"
@@ -346,7 +346,7 @@ class LDAPFilter_approxMatch(LDAPFilter, LDAPAttributeValueAssertion):
     def as_text(self) -> str:
         return (
             "("
-            + self.attributeDesc
+            + self.description.string
             + "~="
             + escape(self.assertionValue.decode("utf-8"))
             + ")"
@@ -386,7 +386,7 @@ class LDAPMatchingRuleAssertion_dnAttributes(BERBoolean):
 # [RFC4511]
 class LDAPMatchingRuleAssertion(BERSequence):
     matchingRule: Optional[str]
-    type: Optional[str]
+    description: Optional[LDAPAttributeDescription]
     matchValue: bytes
     dnAttributes: Optional[bool]  # None signals default value of False
 
@@ -397,7 +397,7 @@ class LDAPMatchingRuleAssertion(BERSequence):
             cls.handle_missing_vals(vals)
 
         matchingRule = None
-        type_ = None
+        description = None
         matchValue = None
         dnAttributes = None
 
@@ -408,9 +408,9 @@ class LDAPMatchingRuleAssertion(BERSequence):
                     raise DuplicateTagReceivedError("matchingRule")
                 matchingRule = LDAPMatchingRuleAssertion_matchingRule.from_wire(unknown_content).string
             elif unknown_tag == LDAPMatchingRuleAssertion_type.tag:
-                if type_ is not None:
+                if description is not None:
                     raise DuplicateTagReceivedError("type")
-                type_ = LDAPMatchingRuleAssertion_type.from_wire(unknown_content).string
+                description = LDAPMatchingRuleAssertion_type.from_wire(unknown_content)
             elif unknown_tag == LDAPMatchingRuleAssertion_matchValue.tag:
                 if matchValue is not None:
                     raise DuplicateTagReceivedError("matchValue")
@@ -426,19 +426,20 @@ class LDAPMatchingRuleAssertion(BERSequence):
 
         if matchValue is None:
             raise DecodingError("matchValue is missing.")
-        return cls(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
+        return cls(matchingRule=matchingRule, description=description,
+                   matchValue=matchValue, dnAttributes=dnAttributes)
 
     def __init__(
         self,
         matchValue: bytes,
         matchingRule: str = None,
-        type_: str = None,
+        description: LDAPMatchingRuleAssertion_type = None,
         dnAttributes: bool = None,
     ):
         self.matchingRule = matchingRule
-        if matchingRule is None and type_ is None:
+        if matchingRule is None and description is None:
             raise ValueError("Type must be present if matchingRule is absent.")
-        self.type = type_
+        self.description = description
         self.matchValue = matchValue
         self.dnAttributes = dnAttributes
 
@@ -446,8 +447,8 @@ class LDAPMatchingRuleAssertion(BERSequence):
         to_send: List[BERBase] = []
         if self.matchingRule is not None:
             to_send.append(LDAPMatchingRuleAssertion_matchingRule(self.matchingRule))
-        if self.type is not None:
-            to_send.append(LDAPMatchingRuleAssertion_type(self.type))
+        if self.description is not None:
+            to_send.append(self.description)
         to_send.append(LDAPMatchingRuleAssertion_matchValue(self.matchValue))
         if self.dnAttributes is not None:
             to_send.append(LDAPMatchingRuleAssertion_dnAttributes(self.dnAttributes))
@@ -457,8 +458,8 @@ class LDAPMatchingRuleAssertion(BERSequence):
         attributes = []
         if self.matchingRule is not None:
             attributes.append(f"matchingRule={self.matchingRule}")
-        if self.type is not None:
-            attributes.append(f"type={self.type}")
+        if self.description is not None:
+            attributes.append(f"description={self.description!r}")
         attributes.append(f"matchValue={self.matchValue!r}")
         if self.dnAttributes is not None:
             attributes.append(f"dnAttributes={self.dnAttributes}")
@@ -474,20 +475,22 @@ class LDAPFilter_extensibleMatch(LDAPFilter, LDAPMatchingRuleAssertion):
             self,
             matchValue: bytes,
             matchingRule: str = None,
-            type_: str = None,
+            description: LDAPMatchingRuleAssertion_type = None,
             dnAttributes: bool = None,
     ):
         # If the matchingRule field is absent, the type field MUST be
         # present, and an equality match is performed for that type.
-        if matchingRule is None and type_ is None:
+        if matchingRule is None and description is None:
             raise ValueError("Type must be present if matchingRule is absent.")
-        super().__init__(matchingRule=matchingRule, type_=type_, matchValue=matchValue, dnAttributes=dnAttributes)
+        super().__init__(
+            matchingRule=matchingRule, description=description, matchValue=matchValue,
+            dnAttributes=dnAttributes)
 
     @property
     def as_text(self) -> str:
         return (
             "("
-            + (self.type if self.type else "")
+            + (self.description.string if self.description else "")
             + (":dn" if self.dnAttributes and self.dnAttributes else "")
             + ((":" + self.matchingRule) if self.matchingRule else "")
             + ":="

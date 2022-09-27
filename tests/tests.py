@@ -21,11 +21,12 @@ from ldapcoder.filter import (
     LDAPFilter_extensibleMatch, LDAPFilter_greaterOrEqual, LDAPFilter_lessOrEqual,
     LDAPFilter_not, LDAPFilter_or, LDAPFilter_present, LDAPFilter_substrings,
     LDAPFilter_substrings_any, LDAPFilter_substrings_final,
-    LDAPFilter_substrings_initial,
+    LDAPFilter_substrings_initial, LDAPMatchingRuleAssertion_type,
 )
 from ldapcoder.ldaputils import (
-    DistinguishedName, LDAPAttribute, LDAPAttributeValueAssertion, LDAPPartialAttribute,
-    LDAPProtocolOp, RelativeDistinguishedName,
+    DistinguishedName, LDAPAttribute, LDAPAttributeDescription,
+    LDAPAttributeValueAssertion, LDAPPartialAttribute, LDAPProtocolOp,
+    RelativeDistinguishedName,
 )
 from ldapcoder.message import LDAPControl, LDAPMessage
 from ldapcoder.operations.abandon import LDAPAbandonRequest
@@ -356,8 +357,10 @@ class MyTests(unittest.TestCase):
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        attributes = [LDAPAttribute(type_="objectClass", values=[b"top", b"domain"]),
-                      LDAPAttribute(type_="dc", values=[b"example"])]
+        objectclass = LDAPAttributeDescription("objectClass")
+        dc = LDAPAttributeDescription("dc")
+        attributes = [LDAPAttribute(description=objectclass, values=[b"top", b"domain"]),
+                      LDAPAttribute(description=dc, values=[b"example"])]
         add = LDAPAddRequest(entry=DistinguishedName("dc=example,dc=com"), attributes=attributes)
         expectation = LDAPMessage(msg_id=2, operation=add)
         self.assertEqual(expectation, result)
@@ -525,7 +528,8 @@ class MyTests(unittest.TestCase):
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        ava = LDAPAttributeValueAssertion(attributeDesc="employeeType", assertionValue=b"salaried")
+        employeeType = LDAPAttributeDescription("employeeType")
+        ava = LDAPAttributeValueAssertion(description=employeeType, assertionValue=b"salaried")
         expectation = LDAPMessage(msg_id=2, operation=LDAPCompareRequest(
             entry=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"), ava=ava))
         self.assertEqual(expectation, result)
@@ -682,15 +686,17 @@ class MyTests(unittest.TestCase):
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
+        givenName = LDAPAttributeDescription("givenName")
+        cn = LDAPAttributeDescription("cn")
         change1 = LDAPModify_change(
             operation=ModifyOperations.delete,
-            modification=LDAPPartialAttribute(type_="givenName", values=[b"John"]))
+            modification=LDAPPartialAttribute(description=givenName, values=[b"John"]))
         change2 = LDAPModify_change(
             operation=ModifyOperations.add,
-            modification=LDAPPartialAttribute(type_="givenName", values=[b"Jonathan"]))
+            modification=LDAPPartialAttribute(description=givenName, values=[b"Jonathan"]))
         change3 = LDAPModify_change(
             operation=ModifyOperations.replace,
-            modification=LDAPPartialAttribute(type_="cn", values=[b"Jonathan Doe"]))
+            modification=LDAPPartialAttribute(description=cn, values=[b"Jonathan Doe"]))
         operation = LDAPModifyRequest(
             object_=DistinguishedName("uid=jdoe,ou=People,dc=example,dc=com"),
             changes=[change1, change2, change3])
@@ -832,7 +838,8 @@ a3 0b -- Begin the AttributeValueAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_equalityMatch.tag)
         result = LDAPFilter_equalityMatch.from_wire(content)
 
-        expectation = LDAPFilter_equalityMatch(attributeDesc="uid", assertionValue=b"jdoe")
+        uid = LDAPAttributeDescription("uid")
+        expectation = LDAPFilter_equalityMatch(description=uid, assertionValue=b"jdoe")
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -849,8 +856,9 @@ a5 26 -- Begin the AttributeValueAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_greaterOrEqual.tag)
         result = LDAPFilter_greaterOrEqual.from_wire(content)
 
+        createTimestamp = LDAPAttributeDescription("createTimestamp")
         expectation = LDAPFilter_greaterOrEqual(
-            attributeDesc="createTimestamp", assertionValue=b"20170102030405.678Z")
+            description=createTimestamp, assertionValue=b"20170102030405.678Z")
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -865,8 +873,9 @@ a6 16 -- Begin the AttributeValueAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_lessOrEqual.tag)
         result = LDAPFilter_lessOrEqual.from_wire(content)
 
+        accountBalance = LDAPAttributeDescription("accountBalance")
         expectation = LDAPFilter_lessOrEqual(
-            attributeDesc="accountBalance", assertionValue=b"1234")
+            description=accountBalance, assertionValue=b"1234")
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -881,8 +890,8 @@ a8 11 -- Begin the AttributeValueAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_approxMatch.tag)
         result = LDAPFilter_approxMatch.from_wire(content)
 
-        expectation = LDAPFilter_approxMatch(
-            attributeDesc="givenName", assertionValue=b"John")
+        givenName = LDAPAttributeDescription("givenName")
+        expectation = LDAPFilter_approxMatch(description=givenName, assertionValue=b"John")
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -906,13 +915,14 @@ a4 1f -- Begin the SubstringFilter sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_substrings.tag)
         result = LDAPFilter_substrings.from_wire(content)
 
+        cn = LDAPAttributeDescription("cn")
         sub1 = LDAPFilter_substrings_initial(b"abc")
         sub2 = LDAPFilter_substrings_any(b"def")
         sub3 = LDAPFilter_substrings_any(b"lmn")
         sub4 = LDAPFilter_substrings_any(b"uvw")
         sub5 = LDAPFilter_substrings_final(b"xyz")
         expectation = LDAPFilter_substrings(
-            type_="cn", substrings=[sub1, sub2, sub3, sub4, sub5])
+            description=cn, substrings=[sub1, sub2, sub3, sub4, sub5])
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -928,7 +938,8 @@ a9 0b -- Begin the MatchingRuleAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_extensibleMatch.tag)
         result = LDAPFilter_extensibleMatch.from_wire(content)
 
-        expectation = LDAPFilter_extensibleMatch(type_="uid", matchValue=b"jdoe")
+        uid = LDAPMatchingRuleAssertion_type("uid")
+        expectation = LDAPFilter_extensibleMatch(description=uid, matchValue=b"jdoe")
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -965,8 +976,9 @@ a9 1f -- Begin the MatchingRuleAssertion sequence with type
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_extensibleMatch.tag)
         result = LDAPFilter_extensibleMatch.from_wire(content)
 
+        uid = LDAPMatchingRuleAssertion_type("uid")
         expectation = LDAPFilter_extensibleMatch(
-            matchingRule="caseIgnoreMatch", type_="uid", matchValue=b"jdoe", dnAttributes=True)
+            matchingRule="caseIgnoreMatch", description=uid, matchValue=b"jdoe", dnAttributes=True)
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -986,8 +998,10 @@ a0 1e -- Begin the and set with type context-specific constructed zero
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_and.tag)
         result = LDAPFilter_and.from_wire(content)
 
-        filter1 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"John")
-        filter2 = LDAPFilter_equalityMatch(attributeDesc="sn", assertionValue=b"Doe")
+        givenName = LDAPAttributeDescription("givenName")
+        sn = LDAPAttributeDescription("sn")
+        filter1 = LDAPFilter_equalityMatch(description=givenName, assertionValue=b"John")
+        filter2 = LDAPFilter_equalityMatch(description=sn, assertionValue=b"Doe")
         expectation = LDAPFilter_and(filters=[filter1, filter2])
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -1020,8 +1034,9 @@ a1 2a -- Begin the or set with type context-specific constructed one
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_or.tag)
         result = LDAPFilter_or.from_wire(content)
 
-        filter1 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"John")
-        filter2 = LDAPFilter_equalityMatch(attributeDesc="givenName", assertionValue=b"Jonathan")
+        givenName = LDAPAttributeDescription("givenName")
+        filter1 = LDAPFilter_equalityMatch(description=givenName, assertionValue=b"John")
+        filter2 = LDAPFilter_equalityMatch(description=givenName, assertionValue=b"Jonathan")
         expectation = LDAPFilter_or(filters=[filter1, filter2])
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
@@ -1049,8 +1064,9 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         content = self.first_level_unwrap(unhexlify(case), LDAPFilter_not.tag)
         result = LDAPFilter_not.from_wire(content)
 
+        givenName = LDAPAttributeDescription("givenName")
         expectation = LDAPFilter_not(value=LDAPFilter_equalityMatch(
-            attributeDesc="givenName", assertionValue=b"John"))
+            description=givenName, assertionValue=b"John"))
         self.assertEqual(expectation, result)
         self.assertEqual(unhexlify(case), result.to_wire())
 
@@ -1082,8 +1098,10 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        filter1 = LDAPFilter_equalityMatch(attributeDesc="objectClass", assertionValue=b"person")
-        filter2 = LDAPFilter_equalityMatch(attributeDesc="uid", assertionValue=b"jdoe")
+        objectClass = LDAPAttributeDescription("objectClass")
+        uid = LDAPAttributeDescription("uid")
+        filter1 = LDAPFilter_equalityMatch(description=objectClass, assertionValue=b"person")
+        filter2 = LDAPFilter_equalityMatch(description=uid, assertionValue=b"jdoe")
         attributes = ["*", "+"]
         filter_ = LDAPFilter_and([filter1, filter2])
         operation = LDAPSearchRequest(
@@ -1117,8 +1135,10 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        attribute1 = LDAPPartialAttribute(type_="objectClass", values=[b"top", b"domain"])
-        attribute2 = LDAPPartialAttribute(type_="dc", values=[b"example"])
+        objectClass = LDAPAttributeDescription("objectClass")
+        dc = LDAPAttributeDescription("dc")
+        attribute1 = LDAPPartialAttribute(description=objectClass, values=[b"top", b"domain"])
+        attribute2 = LDAPPartialAttribute(description=dc, values=[b"example"])
         operation = LDAPSearchResultEntry(
             objectName=DistinguishedName("dc=example,dc=com"), attributes=[attribute1, attribute2])
         expectation = LDAPMessage(msg_id=2, operation=operation)
@@ -1145,8 +1165,10 @@ a2 13 -- Begin the not filter with type context-specific constructed two
         content = self.first_level_unwrap(unhexlify(case), LDAPMessage.tag)
         result = LDAPMessage.from_wire(content)
 
-        attribute1 = LDAPPartialAttribute(type_="objectClass", values=[])
-        attribute2 = LDAPPartialAttribute(type_="dc", values=[])
+        objectClass = LDAPAttributeDescription("objectClass")
+        dc = LDAPAttributeDescription("dc")
+        attribute1 = LDAPPartialAttribute(description=objectClass, values=[])
+        attribute2 = LDAPPartialAttribute(description=dc, values=[])
         operation = LDAPSearchResultEntry(
             objectName=DistinguishedName("dc=example,dc=com"), attributes=[attribute1, attribute2])
         expectation = LDAPMessage(msg_id=2, operation=operation)

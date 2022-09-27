@@ -161,10 +161,10 @@ class RelativeDistinguishedName:
             if len(attribute_.values) != 1:
                 raise ValueError
             # decide if the attribute is stored in bytes or in string representation
-            if is_numericoid(attribute_.type_):
-                self.bytes_attributes[attribute_.type_] = attribute_.to_wire()
+            if attribute_.description.type.names:
+                self.attributes[attribute_.description.type.names[0]] = attribute_.values
             else:
-                self.attributes[attribute_.type_] = attribute_.values
+                self.bytes_attributes[attribute_.description.type.numericoid] = attribute_.to_wire()
 
     def __str__(self) -> str:
         return self.string
@@ -523,10 +523,60 @@ class LDAPException(Exception):
 #           -- [RFC4512]
 # attributedescription = attributetype options
 # attributetype = oid
+# oid = descr / numericoid
+# descr are case-insensitive
 # options = *( SEMI option )
 # option = 1*keychar
 class LDAPAttributeDescription(LDAPString):
-    pass
+    type: str
+    options: Optional[List[str]]
+
+    @property  # type: ignore[override]
+    def string(self) -> str:  # type: ignore[override]
+        oid = self.type
+        # if self.type.names:
+        #     oid = self.type.names[0]
+        # else:
+        #     oid = self.type.numericoid
+        if self.options:
+            return ";".join([oid, *self.options])
+        return oid
+
+    @string.setter
+    def string(self, value: str) -> None:
+        vals = value.split(";")
+        self.type = vals[0]
+        # try:
+        #     type_ = ATTRIBUTE_TYPES[vals[0]]
+        # except KeyError as e:
+        #     raise DecodingError("Received unknown attribute type.") from e
+        # self.type = type_
+        if len(vals) > 1:
+            self.options = vals[1:]
+        else:
+            self.options = None
+
+    @classmethod
+    def from_wire(cls, content: bytes) -> "LDAPAttributeDescription":
+        try:
+            utf8 = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise DecodingError from e
+
+        vals = utf8.split(";")
+        type_ = vals[0]
+        # try:
+        #     type_ = ATTRIBUTE_TYPES[vals[0]]
+        # except KeyError as e:
+        #     raise DecodingError("Received unknown attribute type.") from e
+        if len(vals) == 1:
+            return cls(value=type_)
+        return cls(value=type_, options=vals[1:])
+
+    def __init__(self, value: str, *, options: List[str] = None):
+        options = options or []
+        super().__init__(";".join([value, *options]))
+        # super().__init__(";".join([value.numericoid, *options]))
 
 
 # AssertionValue ::= OCTET STRING
@@ -538,7 +588,7 @@ class LDAPAssertionValue(BEROctetString):
 #      attributeDesc   AttributeDescription,
 #      assertionValue  AssertionValue }
 class LDAPAttributeValueAssertion(BERSequence):
-    attributeDesc: str
+    description: LDAPAttributeDescription
     assertionValue: bytes
 
     @classmethod
@@ -548,20 +598,19 @@ class LDAPAttributeValueAssertion(BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        attributeDesc = decode(vals[0], LDAPAttributeDescription).string
+        description = decode(vals[0], LDAPAttributeDescription)
         assertionValue = decode(vals[1], LDAPAssertionValue).bytes_
-        return cls(attributeDesc=attributeDesc, assertionValue=assertionValue)
+        return cls(description=description, assertionValue=assertionValue)
 
-    def __init__(self, attributeDesc: str, assertionValue: bytes):
-        self.attributeDesc = attributeDesc
+    def __init__(self, description: LDAPAttributeDescription, assertionValue: bytes):
+        self.description = description
         self.assertionValue = assertionValue
 
     def to_wire(self) -> bytes:
-        return self.wrap([LDAPAttributeDescription(self.attributeDesc),
-                          LDAPAssertionValue(self.assertionValue)])
+        return self.wrap([self.description, LDAPAssertionValue(self.assertionValue)])
 
     def __repr__(self) -> str:
-        attributes = [f"attributeDesc={self.attributeDesc}",
+        attributes = [f"description={self.description!r}",
                       f"assertionValue={self.assertionValue!r}"]
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
@@ -628,7 +677,7 @@ class LDAPAttributeValueSet(BERSet):
 #      vals       SET OF value AttributeValue }
 # [RFC4511]
 class LDAPPartialAttribute(BERSequence):
-    type_: str
+    description: LDAPAttributeDescription
     values: List[bytes]
 
     @classmethod
@@ -638,20 +687,19 @@ class LDAPPartialAttribute(BERSequence):
             cls.handle_missing_vals(vals)
         if len(vals) > 2:
             cls.handle_additional_vals(vals[2:])
-        type_ = decode(vals[0], LDAPAttributeDescription).string
+        description = decode(vals[0], LDAPAttributeDescription)
         values = decode(vals[1], LDAPAttributeValueSet).values
-        return cls(type_=type_, values=values)
+        return cls(description=description, values=values)
 
-    def __init__(self, type_: str, values: List[bytes]):
-        self.type_ = type_
+    def __init__(self, description: LDAPAttributeDescription, values: List[bytes]):
+        self.description = description
         self.values = values
 
     def to_wire(self) -> bytes:
-        return self.wrap([
-            LDAPAttributeDescription(self.type_), LDAPAttributeValueSet(self.values)])
+        return self.wrap([self.description, LDAPAttributeValueSet(self.values)])
 
     def __repr__(self) -> str:
-        attributes = [f"type_={self.type_}", f"values={self.values!r}"]
+        attributes = [f"description={self.description!r}", f"values={self.values!r}"]
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
 
 
@@ -681,10 +729,10 @@ class LDAPPartialAttributeList(BERSequence):
 #      vals (SIZE(1..MAX))})
 # [RFC4511]
 class LDAPAttribute(LDAPPartialAttribute):
-    def __init__(self, type_: str, values: List[bytes]):
+    def __init__(self, description: LDAPAttributeDescription, values: List[bytes]):
         if len(values) == 0:
             raise ValueError(f"{self.__class__.__name__} takes at least one value.")
-        super().__init__(type_, values)
+        super().__init__(description, values)
 
 
 # AttributeList ::= SEQUENCE OF attribute Attribute
