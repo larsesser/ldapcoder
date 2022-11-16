@@ -33,7 +33,9 @@ class Registry(Generic[KT, VT]):
 
 
 class ProtocolOperationsRegistry(Registry[int, Type["LDAPProtocolOp"]]):
-    def add(self, item: Type["LDAPProtocolOp"]) -> Type["LDAPProtocolOp"]:
+    ProtocolOperation = TypeVar("ProtocolOperation", bound=Type["LDAPProtocolOp"])
+
+    def add(self, item: ProtocolOperation) -> ProtocolOperation:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
@@ -44,7 +46,9 @@ PROTOCOL_OPERATIONS = ProtocolOperationsRegistry()
 
 
 class ControlsRegistry(Registry[str, Type["LDAPControl"]]):
-    def add(self, item: Type["LDAPControl"]) -> Type["LDAPControl"]:
+    Control = TypeVar("Control", bound=Type["LDAPControl"])
+
+    def add(self, item: Control) -> Control:
         if item.controlType in self._items:
             raise RuntimeError
         self._items[item.controlType] = item
@@ -55,7 +59,9 @@ CONTROLS = ControlsRegistry()
 
 
 class AuthenticationChoiceRegistry(Registry[int, Type["LDAPAuthenticationChoice"]]):
-    def add(self, item: Type["LDAPAuthenticationChoice"]) -> Type["LDAPAuthenticationChoice"]:
+    AuthenticationChoice = TypeVar("AuthenticationChoice", bound=Type["LDAPAuthenticationChoice"])
+
+    def add(self, item: AuthenticationChoice) -> AuthenticationChoice:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
@@ -66,7 +72,9 @@ AUTHENTICATION_CHOICES = AuthenticationChoiceRegistry()
 
 
 class FilterRegistry(Registry[int, Type["LDAPFilter"]]):
-    def add(self, item: Type["LDAPFilter"]) -> Type["LDAPFilter"]:
+    Filter = TypeVar("Filter", bound=Type["LDAPFilter"])
+
+    def add(self, item: Filter) -> Filter:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
@@ -77,7 +85,9 @@ FILTERS = FilterRegistry()
 
 
 class SubstringRegistry(Registry[int, Type["LDAPFilter_substrings_string"]]):
-    def add(self, item: Type["LDAPFilter_substrings_string"]) -> Type["LDAPFilter_substrings_string"]:
+    Substring = TypeVar("Substring", bound=Type["LDAPFilter_substrings_string"])
+
+    def add(self, item: Substring) -> Substring:
         if item.tag in self._items:
             raise RuntimeError
         self._items[item.tag] = item
@@ -88,7 +98,9 @@ SUBSTRINGS = SubstringRegistry()
 
 
 class ExtendedRequestRegistry(Registry[str, Type["LDAPExtendedRequest"]]):
-    def add(self, item: Type["LDAPExtendedRequest"]) -> Type["LDAPExtendedRequest"]:
+    ExtendedRequest = TypeVar("ExtendedRequest", bound=Type["LDAPExtendedRequest"])
+
+    def add(self, item: ExtendedRequest) -> ExtendedRequest:
         if item.requestName in self._items:
             raise RuntimeError
         self._items[item.requestName] = item
@@ -99,7 +111,9 @@ EXTENDED_REQUESTS = ExtendedRequestRegistry()
 
 
 class ExtendedResponseRegistry(Registry[str, Type["LDAPExtendedResponse"]]):
-    def add(self, item: Type["LDAPExtendedResponse"]) -> Type["LDAPExtendedResponse"]:
+    ExtendedResponse = TypeVar("ExtendedResponse", bound=Type["LDAPExtendedResponse"])
+
+    def add(self, item: ExtendedResponse) -> ExtendedResponse:
         if item.responseName in self._items:
             raise RuntimeError
         if item.responseName is None:
@@ -112,7 +126,9 @@ EXTENDED_RESPONSES = ExtendedResponseRegistry()
 
 
 class IntermediateResponseRegistry(Registry[str, Type["LDAPIntermediateResponse"]]):
-    def add(self, item: Type["LDAPIntermediateResponse"]) -> Type["LDAPIntermediateResponse"]:
+    IntermediateResponse = TypeVar("IntermediateResponse", bound=Type["LDAPIntermediateResponse"])
+
+    def add(self, item: IntermediateResponse) -> IntermediateResponse:
         if item.responseName in self._items:
             raise RuntimeError
         if item.responseName is None:
