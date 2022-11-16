@@ -163,9 +163,7 @@ class BERBase(metaclass=abc.ABCMeta):
         return self.to_wire() == other.to_wire()
 
     def __ne__(self, other: Any) -> bool:
-        if not isinstance(other, BERBase):
-            return NotImplemented
-        return self.to_wire() != other.to_wire()
+        return not self == other
 
     @abc.abstractmethod
     def __repr__(self) -> str:
