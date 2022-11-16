@@ -53,8 +53,8 @@ class LDAPString(BEROctetString):
     """An utf-8 encoded string."""
     string: str
 
-    @property  # type: ignore[override]
-    def bytes_(self) -> bytes:  # type: ignore[override]
+    @property
+    def bytes_(self) -> bytes:
         try:
             encoded = self.string.encode("utf-8")
         except UnicodeEncodeError as e:
@@ -360,8 +360,8 @@ class DistinguishedName:
 class LDAPDN(LDAPString):
     dn: DistinguishedName
 
-    @property  # type: ignore[override]
-    def string(self) -> str:  # type: ignore[override]
+    @property
+    def string(self) -> str:
         return self.dn.string
 
     @string.setter
@@ -389,8 +389,8 @@ class LDAPDN(LDAPString):
 class LDAPRelativeDN(LDAPString):
     rdn: RelativeDistinguishedName
 
-    @property  # type: ignore[override]
-    def string(self) -> str:  # type: ignore[override]
+    @property
+    def string(self) -> str:
         return self.rdn.string
 
     @string.setter
@@ -434,8 +434,8 @@ class LDAPOID(BEROctetString):
     """An object identifier in dotted decimal form."""
     oid: str
 
-    @property  # type: ignore[override]
-    def bytes_(self) -> bytes:  # type: ignore[override]
+    @property
+    def bytes_(self) -> bytes:
         try:
             encoded = self.oid.encode("utf-8")
         except UnicodeEncodeError as e:
@@ -483,8 +483,8 @@ class LDAPMessageId(BERInteger):
     """
     message_id: int
 
-    @property  # type: ignore[override]
-    def integer(self) -> int:  # type: ignore[override]
+    @property
+    def integer(self) -> int:
         return self.message_id
 
     @integer.setter
@@ -531,8 +531,8 @@ class LDAPAttributeDescription(LDAPString):
     type: str
     options: Optional[List[str]]
 
-    @property  # type: ignore[override]
-    def string(self) -> str:  # type: ignore[override]
+    @property
+    def string(self) -> str:
         oid = self.type
         # if self.type.names:
         #     oid = self.type.names[0]
