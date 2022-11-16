@@ -1,0 +1,3 @@
+[flake8]
+# TODO 88 or 100?
+max-line-length = 100
