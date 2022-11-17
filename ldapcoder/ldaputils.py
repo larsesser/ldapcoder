@@ -4,12 +4,14 @@ import abc
 import binascii
 from string import hexdigits as HEXDIGITS, printable as PRINTABLE
 from typing import (
-    TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Type,
+    TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Type,
     TypeVar, Union,
 )
 
 from ldapcoder.berutils import BERBase, BERInteger, BEROctetString, BERSequence, BERSet
 from ldapcoder.exceptions import DecodingError, EncodingError
+from ldapcoder.registry import ATTRIBUTE_TYPES
+from ldapcoder.schema.attribute_types import AttributeType
 
 if TYPE_CHECKING:
     from ldapcoder.result import ResultCodes
@@ -528,16 +530,15 @@ class LDAPException(Exception):
 # options = *( SEMI option )
 # option = 1*keychar
 class LDAPAttributeDescription(LDAPString):
-    type: str
+    type: AttributeType[Any, Any, Any, Any]
     options: Optional[List[str]]
 
     @property
     def string(self) -> str:
-        oid = self.type
-        # if self.type.names:
-        #     oid = self.type.names[0]
-        # else:
-        #     oid = self.type.numericoid
+        if self.type.names:
+            oid = self.type.names[0]
+        else:
+            oid = self.type.numericoid
         if self.options:
             return ";".join([oid, *self.options])
         return oid
@@ -545,12 +546,11 @@ class LDAPAttributeDescription(LDAPString):
     @string.setter
     def string(self, value: str) -> None:
         vals = value.split(";")
-        self.type = vals[0]
-        # try:
-        #     type_ = ATTRIBUTE_TYPES[vals[0]]
-        # except KeyError as e:
-        #     raise DecodingError("Received unknown attribute type.") from e
-        # self.type = type_
+        try:
+            attribute_type = ATTRIBUTE_TYPES[vals[0]]()
+        except KeyError as e:
+            raise DecodingError("Received unknown attribute type.") from e
+        self.type = attribute_type
         if len(vals) > 1:
             self.options = vals[1:]
         else:
@@ -564,19 +564,34 @@ class LDAPAttributeDescription(LDAPString):
             raise DecodingError from e
 
         vals = utf8.split(";")
-        type_ = vals[0]
-        # try:
-        #     type_ = ATTRIBUTE_TYPES[vals[0]]
-        # except KeyError as e:
-        #     raise DecodingError("Received unknown attribute type.") from e
+        try:
+            attribute_type = ATTRIBUTE_TYPES[vals[0]]()
+        except KeyError as e:
+            raise DecodingError("Received unknown attribute type.") from e
         if len(vals) == 1:
-            return cls(value=type_)
-        return cls(value=type_, options=vals[1:])
+            return cls(value=attribute_type)
+        return cls(value=attribute_type, options=vals[1:])
 
-    def __init__(self, value: str, *, options: List[str] = None):
+    def __init__(self, value: AttributeType[Any, Any, Any, Any], *, options: List[str] = None):
         options = options or []
-        super().__init__(";".join([value, *options]))
-        # super().__init__(";".join([value.numericoid, *options]))
+        super().__init__(";".join([value.numericoid, *options]))
+
+    def __eq__(self, other: Any) -> bool:
+        """Two AttributeDescriptions with the same type and same set of options are equal.
+
+        See Sec. 2.5 [RFC4512].
+        """
+        if not isinstance(other, LDAPAttributeDescription):
+            return False
+        if self.type != other.type:
+            return False
+        if self.options is None or other.options is None:
+            return True if self.options == other.options else False
+        return set(self.options) == set(other.options)
+
+    def __hash__(self) -> int:
+        options = set(self.options) if self.options is not None else None
+        return hash((self.type, options))
 
 
 # AssertionValue ::= OCTET STRING
@@ -613,6 +628,21 @@ class LDAPAttributeValueAssertion(BERSequence):
         attributes = [f"description={self.description!r}",
                       f"assertionValue={self.assertionValue!r}"]
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
+    def equals(self, attribute: "SingleValuedAttribute") -> Optional[bool]:
+        if self.description.type.equality is None:
+            return None
+        return self.description.type.equality.equals_rule(attribute, self.assertionValue)
+
+    def lesser(self, attribute: "SingleValuedAttribute") -> Optional[bool]:
+        if self.description.type.ordering is None:
+            return None
+        return self.description.type.ordering.lesser_rule(attribute, self.assertionValue)
+
+    def contains(self, attribute: "SingleValuedAttribute") -> Optional[bool]:
+        if self.description.type.substring is None:
+            return None
+        return self.description.type.substring.contains_rule(attribute, self.assertionValue)
 
 
 # AttributeSelection ::= SEQUENCE OF selector LDAPString
