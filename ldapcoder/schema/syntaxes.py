@@ -34,6 +34,11 @@ class LdapSyntax(metaclass=abc.ABCMeta):
     numericoid: str = ""
     description: str = ""
 
+    def __eq__(self, other):
+        if not isinstance(other, LdapSyntax):
+            return False
+        return self.numericoid == other.numericoid
+
     @classmethod
     def decode_value(cls, content: bytes) -> Any:
         """Convert the bytes form of an object value into its pythonic form."""

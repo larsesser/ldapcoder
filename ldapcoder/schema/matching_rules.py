@@ -59,6 +59,11 @@ class MatchingRule(Generic[SYNTAX], metaclass=abc.ABCMeta):
     is_obsolete: bool = False
     syntax: SYNTAX
 
+    def __eq__(self, other):
+        if not isinstance(other, MatchingRule):
+            return False
+        return self.numericoid == other.numericoid
+
 
 class EqualityMatchingRule(MatchingRule[SYNTAX], metaclass=abc.ABCMeta):
     @classmethod

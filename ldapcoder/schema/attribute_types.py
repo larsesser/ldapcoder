@@ -100,6 +100,11 @@ class AttributeType(Generic[EQUALITY, ORDERING, SUBSTRING, SYNTAX], metaclass=ab
     is_user_modifiable: bool = True
     usage: AttributeTypeUsages
 
+    def __eq__(self, other):
+        if not isinstance(other, AttributeType):
+            return False
+        return self.numericoid == other.numericoid
+
 
 # ( 2.5.4.1 NAME 'aliasedObjectName'
 #   EQUALITY distinguishedNameMatch
