@@ -753,3 +753,21 @@ class LDAPAttributeList(BERSequence):
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + f"(value={self.attributes!r}"
+
+
+class SingleValuedAttribute(LDAPAttribute):
+    """No official LDAP type, but helpful for f.e. LDAPAttributeValueAssertion."""
+    value: bytes
+
+    @property
+    def values(self) -> List[bytes]:
+        return [self.value]
+
+    @values.setter
+    def values(self, values: List[bytes]) -> None:
+        if len(values) != 1:
+            raise ValueError
+        self.value = values[0]
+
+    def __init__(self, type_: LDAPAttributeDescription, value: bytes):
+        super().__init__(type_, [value])
