@@ -1,6 +1,8 @@
 import abc
 from typing import TYPE_CHECKING, Dict, Generic, Type, TypeVar
 
+from ldapcoder.exceptions import DecodingError
+
 if TYPE_CHECKING:
     from ldapcoder.filter import LDAPFilter, LDAPFilter_substrings_string
     from ldapcoder.ldaputils import LDAPProtocolOp
@@ -21,7 +23,9 @@ class Registry(Generic[KT, VT]):
         self._items = {}
 
     def __getitem__(self, item: KT) -> VT:
-        return self._items[item]
+        if item in self._items:
+            return self._items[item]
+        raise DecodingError
 
     def __contains__(self, item: KT) -> bool:
         return item in self._items
