@@ -1,9 +1,9 @@
 import abc
-from typing import TYPE_CHECKING, Dict, Generic, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Generic, Type, TypeVar
 
 if TYPE_CHECKING:
     from ldapcoder.filter import LDAPFilter, LDAPFilter_substrings_string
-    from ldapcoder.ldaputils import LDAPProtocolOp
+    from ldapcoder.ldaputils import AttributeType, LDAPProtocolOp
     from ldapcoder.message import LDAPControl
     from ldapcoder.operations.bind import LDAPAuthenticationChoice
     from ldapcoder.operations.extended import LDAPExtendedRequest, LDAPExtendedResponse
@@ -138,3 +138,20 @@ class IntermediateResponseRegistry(Registry[str, Type["LDAPIntermediateResponse"
 
 
 INTERMEDIATE_RESPONSES = IntermediateResponseRegistry()
+
+
+class AttributeTypeRegistry(Registry[str, Type["AttributeType[Any, Any, Any, Any]"]]):
+    AttributeType = TypeVar("AttributeType", bound=Type["AttributeType[Any, Any, Any, Any]"])
+
+    def add(self, item: AttributeType) -> AttributeType:
+        if item.numericoid in self._items:
+            raise RuntimeError
+        self._items[item.numericoid] = item
+        for name in item.names:
+            if name in self._items:
+                raise RuntimeError
+            self._items[name] = item
+        return item
+
+
+ATTRIBUTE_TYPES = AttributeTypeRegistry()
