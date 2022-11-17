@@ -9,7 +9,7 @@ from typing import (
 )
 
 from ldapcoder.berutils import BERBase, BERInteger, BEROctetString, BERSequence, BERSet
-from ldapcoder.exceptions import DecodingError, EncodingError
+from ldapcoder.exceptions import DecodingError, EncodingError, UnknownAttributeError
 from ldapcoder.registry import ATTRIBUTE_TYPES
 from ldapcoder.schema.attribute_types import AttributeType
 
@@ -546,11 +546,10 @@ class LDAPAttributeDescription(LDAPString):
     @string.setter
     def string(self, value: str) -> None:
         vals = value.split(";")
-        try:
-            attribute_type = ATTRIBUTE_TYPES[vals[0]]()
-        except KeyError as e:
-            raise DecodingError("Received unknown attribute type.") from e
-        self.type = attribute_type
+        oid = vals[0]
+        if oid not in ATTRIBUTE_TYPES:
+            raise UnknownAttributeError(oid)
+        self.type = ATTRIBUTE_TYPES[vals[0]]()
         if len(vals) > 1:
             self.options = vals[1:]
         else:
@@ -564,10 +563,10 @@ class LDAPAttributeDescription(LDAPString):
             raise DecodingError from e
 
         vals = utf8.split(";")
-        try:
-            attribute_type = ATTRIBUTE_TYPES[vals[0]]()
-        except KeyError as e:
-            raise DecodingError("Received unknown attribute type.") from e
+        oid = vals[0]
+        if oid not in ATTRIBUTE_TYPES:
+            raise UnknownAttributeError(oid)
+        attribute_type = ATTRIBUTE_TYPES[vals[0]]()
         if len(vals) == 1:
             return cls(value=attribute_type)
         return cls(value=attribute_type, options=vals[1:])
