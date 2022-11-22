@@ -4,15 +4,11 @@ import abc
 import binascii
 from string import hexdigits as HEXDIGITS, printable as PRINTABLE
 from typing import (
-    TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Type,
-    TypeVar, Union,
+    Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union,
 )
 
 from ldapcoder.berutils import BERBase, BERInteger, BEROctetString, BERSequence, BERSet
 from ldapcoder.exceptions import DecodingError, EncodingError
-
-if TYPE_CHECKING:
-    from ldapcoder.result import ResultCodes
 
 
 def escape(s: str) -> str:
@@ -507,15 +503,6 @@ class LDAPProtocolRequest(LDAPProtocolOp, metaclass=abc.ABCMeta):
 
 class LDAPProtocolResponse(LDAPProtocolOp, metaclass=abc.ABCMeta):
     pass
-
-
-class LDAPException(Exception):
-    resultCode: "ResultCodes"
-    message: Optional[bytes]
-
-    def __init__(self, resultCode: "ResultCodes", message: bytes = None):
-        self.resultCode = resultCode
-        self.message = message
 
 
 # AttributeDescription ::= LDAPString

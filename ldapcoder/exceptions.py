@@ -1,3 +1,9 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ldapcoder.result import LDAPResult
+
+
 class EncodingError(Exception):
     pass
 
@@ -26,3 +32,16 @@ class DuplicateTagReceivedError(DecodingError):
 
     def __str__(self) -> str:
         return f"{self.description} received twice."
+
+
+class HandlingError(Exception):
+    """Terminate the handling of an LDAP request.
+
+    This is used if the handling of an LDAP request needs to be prematurely terminated.
+    The LDAPResult which would normally be replied to the client is stored here, to be
+    sent to the client after caught at a higher level.
+    """
+    result: "LDAPResult"
+
+    def __init__(self, result: "LDAPResult"):
+        self.result = result

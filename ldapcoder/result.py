@@ -4,9 +4,9 @@ import enum
 from typing import List, Optional, Type
 
 from ldapcoder.berutils import BERBase, BEREnumerated, BERSequence, TagClasses
+from ldapcoder.exceptions import HandlingError
 from ldapcoder.ldaputils import (
-    LDAPDN, LDAPURI, DistinguishedName, LDAPException, LDAPProtocolResponse, LDAPString,
-    decode,
+    LDAPDN, LDAPURI, DistinguishedName, LDAPProtocolResponse, LDAPString, decode,
 )
 
 
@@ -94,8 +94,13 @@ class ResultCodes(enum.IntEnum):
     def bytes_name(self) -> bytes:
         return self.name.encode("utf-8")
 
-    def to_exception(self, message: bytes = None) -> LDAPException:
-        return LDAPException(resultCode=self, message=message)
+    def to_exception(self, matchedDN: DistinguishedName = None, diagnosticMessage: str = None,
+                     referral: Optional[List[str]] = None) -> HandlingError:
+        matchedDN = matchedDN or DistinguishedName("")
+        diagnosticMessage = diagnosticMessage or ""
+        result = LDAPResult(resultCode=self, matchedDN=matchedDN,
+                            diagnosticMessage=diagnosticMessage, referral=referral)
+        return HandlingError(result=result)
 
 
 class LDAPResultCode(BEREnumerated):
@@ -221,3 +226,7 @@ class LDAPResult(LDAPProtocolResponse, BERSequence):
         if self.referral:
             attributes.append(f"referral={self.referral}")
         return self.__class__.__name__ + "(" + ", ".join(attributes) + ")"
+
+    @property
+    def exception(self) -> HandlingError:
+        return HandlingError(result=self)
